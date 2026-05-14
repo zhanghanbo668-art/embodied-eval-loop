@@ -6,6 +6,7 @@ CI-friendly. Real ROSBag2 backends can implement the same protocol later.
 
 from __future__ import annotations
 
+from contextlib import closing
 from dataclasses import dataclass
 import json
 from pathlib import Path
@@ -292,7 +293,7 @@ class SQLiteRosbag2Reader:
             return
 
         window = self._episode_window(episode_id) if episode_id else None
-        with sqlite3.connect(self.db_path) as connection:
+        with closing(sqlite3.connect(self.db_path)) as connection:
             rows = connection.execute(
                 """
                 SELECT timestamp, data
@@ -314,7 +315,7 @@ class SQLiteRosbag2Reader:
             )
 
     def _load_db_topics(self) -> dict[str, tuple[int, str]]:
-        with sqlite3.connect(self.db_path) as connection:
+        with closing(sqlite3.connect(self.db_path)) as connection:
             rows = connection.execute("SELECT id, name, type FROM topics").fetchall()
         return {str(name): (int(topic_id), str(message_type)) for topic_id, name, message_type in rows}
 
@@ -389,7 +390,7 @@ class SQLiteRosbag2Reader:
         return None
 
     def _message_time_bounds_ms(self) -> tuple[int, int]:
-        with sqlite3.connect(self.db_path) as connection:
+        with closing(sqlite3.connect(self.db_path)) as connection:
             row = connection.execute("SELECT MIN(timestamp), MAX(timestamp) FROM messages").fetchone()
         if not row or row[0] is None or row[1] is None:
             return 0, 0

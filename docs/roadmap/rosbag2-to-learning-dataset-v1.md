@@ -26,7 +26,9 @@ Implemented in the current v1 slice:
 - Dataset validation CLI in `pipelines.validate_dataset`.
 - Learning-dataset export CLI in `pipelines.export_dataset`.
 - LeRobot-style metadata stub export.
+- HDF5-compatible packing-contract stub export.
 - Parquet-if-available action/state export with JSONL fallback.
+- GitHub Actions smoke workflow that installs the package, runs `pytest`, generates the ROSBag2 SQLite fixture, ingests it, validates it, exports dataset views, and runs smoke checks.
 
 Still future work:
 

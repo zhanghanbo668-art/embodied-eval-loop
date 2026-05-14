@@ -18,6 +18,7 @@ def test_validate_and_export_sqlite_rosbag_dataset() -> None:
     validation = validate_dataset("outputs/datasets/softrobotics_rosbag_sqlite_v1")
     export = export_dataset("outputs/datasets/softrobotics_rosbag_sqlite_v1", export_format="learning_jsonl")
     lerobot = export_dataset("outputs/datasets/softrobotics_rosbag_sqlite_v1", export_format="lerobot_stub")
+    hdf5 = export_dataset("outputs/datasets/softrobotics_rosbag_sqlite_v1", export_format="hdf5_stub")
 
     assert validation.status == "pass"
     assert validation.error_count == 0
@@ -26,6 +27,7 @@ def test_validate_and_export_sqlite_rosbag_dataset() -> None:
     assert Path(export.manifest_path).exists()
     assert Path(export.index_path).exists()
     assert Path(lerobot.optional_artifacts["lerobot_metadata"]).exists()
+    assert Path(hdf5.optional_artifacts["hdf5_metadata"]).exists()
 
     manifest = load_json(export.manifest_path)
     assert manifest["format"] == "learning_jsonl"

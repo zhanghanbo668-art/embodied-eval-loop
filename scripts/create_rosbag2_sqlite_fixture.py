@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import closing
 import json
 from pathlib import Path
 import sqlite3
@@ -54,7 +55,7 @@ def main() -> None:
     if DB_PATH.exists():
         DB_PATH.unlink()
 
-    with sqlite3.connect(DB_PATH) as connection:
+    with closing(sqlite3.connect(DB_PATH)) as connection:
         connection.execute(
             """
             CREATE TABLE topics(

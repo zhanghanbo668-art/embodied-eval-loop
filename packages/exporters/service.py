@@ -37,6 +37,7 @@ def export_dataset(
     - `learning_jsonl`: portable JSONL index plus per-episode stream references.
     - `parquet`: same index plus tabular action/state Parquet files when engines are available.
     - `lerobot_stub`: JSON metadata compatible with a future LeRobot-style adapter.
+    - `hdf5_stub`: JSON manifest describing an HDF5-ready packing contract.
     """
     root = resolve_repo_path(dataset_root)
     manifest = load_json(root / "dataset_manifest.json")
@@ -52,6 +53,8 @@ def export_dataset(
         optional_artifacts.update(_write_parquet_exports(target, episodes))
     elif export_format == "lerobot_stub":
         optional_artifacts["lerobot_metadata"] = str(_write_lerobot_stub(target, dataset_id, episodes))
+    elif export_format == "hdf5_stub":
+        optional_artifacts["hdf5_metadata"] = str(_write_hdf5_stub(target, dataset_id, episodes))
     elif export_format != "learning_jsonl":
         raise ValueError(f"Unsupported export format: {export_format}")
 
@@ -199,3 +202,27 @@ def _write_lerobot_stub(target: Path, dataset_id: str, episodes: list[dict[str, 
         ],
     }
     return dump_json(target / "lerobot_dataset.json", metadata)
+
+
+def _write_hdf5_stub(target: Path, dataset_id: str, episodes: list[dict[str, Any]]) -> Path:
+    metadata = {
+        "dataset_id": dataset_id,
+        "container": "hdf5_stub",
+        "intended_layout": {
+            "/episodes/<episode_id>/action": "float or structured action tensor",
+            "/episodes/<episode_id>/state": "state tensor",
+            "/episodes/<episode_id>/observation/rgb": "external media ref or packed tensor",
+            "/episodes/<episode_id>/instruction": "utf-8 string",
+            "/episodes/<episode_id>/quality": "json-serializable attributes",
+        },
+        "episodes": [
+            {
+                "episode_id": episode.get("episode_id"),
+                "num_steps": episode.get("num_steps"),
+                "task_id": episode.get("task_id"),
+            }
+            for episode in episodes
+        ],
+        "note": "This stub defines a stable HDF5 packing contract before adding a binary writer dependency.",
+    }
+    return dump_json(target / "hdf5_dataset.json", metadata)

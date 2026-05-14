@@ -17,18 +17,15 @@ Use this checklist before making the repository public.
 Run:
 
 ```bash
-python -m pip install -e .
+python -m pip install -e .[dev]
+python -m pytest -q
+python scripts/create_rosbag2_sqlite_fixture.py
+python -m pipelines.ingest --config configs/datasets/softrobotics_rosbag_sqlite.yaml
 python -m pipelines.demo
 python scripts/run_smoke_checks.py
 python -m pipelines.validate_dataset --dataset outputs/datasets/softrobotics_rosbag_sqlite_v1
 python -m pipelines.export_dataset --dataset outputs/datasets/softrobotics_rosbag_sqlite_v1 --format lerobot_stub
-```
-
-Optional:
-
-```bash
-python -m pip install pytest
-python -m pytest -q
+python -m pipelines.export_dataset --dataset outputs/datasets/softrobotics_rosbag_sqlite_v1 --format hdf5_stub
 ```
 
 ## GitHub Setup
@@ -44,21 +41,15 @@ git remote add origin https://github.com/<username>/<repo>.git
 git push -u origin main
 ```
 
-## Optional GitHub Actions
+## GitHub Actions
 
-This repository includes a smoke workflow template at:
-
-```text
-docs/github-actions-smoke.yml
-```
-
-To enable it, copy it to:
+This repository already includes an enabled smoke workflow at:
 
 ```text
 .github/workflows/smoke.yml
 ```
 
-If you push through GitHub CLI or a token, the token must include the `workflow` scope.
+It installs the package with test dependencies, runs `pytest`, generates the ROSBag2 SQLite fixture, ingests the SQLite dataset, validates it, exports LeRobot and HDF5 stubs, and finishes with the end-to-end smoke script.
 
 ## Suggested Repository Description
 

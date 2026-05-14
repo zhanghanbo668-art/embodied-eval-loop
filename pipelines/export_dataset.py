@@ -15,7 +15,7 @@ def main() -> None:
     parser.add_argument(
         "--format",
         default="learning_jsonl",
-        choices=["learning_jsonl", "parquet", "lerobot_stub"],
+        choices=["learning_jsonl", "parquet", "lerobot_stub", "hdf5_stub"],
         help="Export format.",
     )
     parser.add_argument("--output", help="Optional output root.")

@@ -32,6 +32,7 @@ def main() -> None:
     assert rosbag_sqlite.episode_count == 2
     sqlite_validation = validate_dataset("outputs/datasets/softrobotics_rosbag_sqlite_v1")
     sqlite_export = export_dataset("outputs/datasets/softrobotics_rosbag_sqlite_v1", export_format="lerobot_stub")
+    sqlite_hdf5 = export_dataset("outputs/datasets/softrobotics_rosbag_sqlite_v1", export_format="hdf5_stub")
 
     cached = run_evaluation("configs/eval/libero_cached_eval.yaml")
     perturbed = run_evaluation("configs/eval/libero_perturbed_eval.yaml")
@@ -79,6 +80,7 @@ def main() -> None:
     assert sqlite_validation.status == "pass"
     assert sqlite_export.episode_count == 2
     assert Path(sqlite_export.optional_artifacts["lerobot_metadata"]).exists()
+    assert Path(sqlite_hdf5.optional_artifacts["hdf5_metadata"]).exists()
     assert rosbag_episode_quality["reference_stream"] == "rgb"
     assert Path("outputs/datasets/softrobotics_rosbag_v1/episodes/ROSBAG_EP_0001/streams/pressure.json").exists()
     assert rosbag_replay_summary["quality"]["status"] == "pass"

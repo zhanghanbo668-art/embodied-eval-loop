@@ -1,32 +1,47 @@
-# Case Study: Benchmark and ROS-Compatible Evaluation Loop
+# Case Study: From ROSBag2 Logs to Embodied Policy Evaluation
 
 ## Summary
 
-This case study demonstrates the main purpose of the stack: turn two different embodied-data sources into one reproducible evaluation and failure-analysis workflow.
+This case study shows the full purpose of the project: convert heterogeneous embodied-data sources into one reproducible evaluation and failure-analysis workflow.
 
-The sources are:
+The stack now covers three source styles:
 
-- a small benchmark-style LIBERO debug slice;
-- a ROS-compatible soft robotics metadata trace.
+- a benchmark-style LIBERO debug slice;
+- a ROSBag2-style metadata fixture;
+- a ROSBag2 SQLite `.db3` fixture using standard `topics` and `messages` tables.
 
-Both are normalized into the same episode artifact contract, evaluated through config-driven runs, analyzed with the same failure taxonomy, and rendered into Markdown / HTML reports.
+All three are mapped into the same episode artifact contract and can flow through validation, export, replay, failure analysis, and reporting.
 
 ## Research Question
 
-Can heterogeneous embodied traces be made comparable and replayable without training a new model or bringing up robot hardware?
+Can benchmark trajectories and ROSBag2 robot logs be turned into one evaluation/control-plane workflow that produces validated learning datasets and failure-oriented reports without requiring online robot execution?
 
-The answer shown by this MVP is yes, at the workflow level. The project does not claim new policy performance. It demonstrates that benchmark trajectories and ROS-compatible logs can share a common data and evaluation path.
+This project answers yes at the infrastructure level.
 
-## Reproduce the Case Study
+It does not claim a new model. Its contribution is the software layer that makes embodied policy experiments more reproducible, diagnosable, and comparable.
+
+## End-to-End Reproduction
 
 From the repository root:
 
 ```bash
+python scripts/create_rosbag2_sqlite_fixture.py
 python -m pipelines.demo
 python scripts/run_smoke_checks.py
+python -m pipelines.validate_dataset --dataset outputs/datasets/softrobotics_rosbag_sqlite_v1
+python -m pipelines.export_dataset --dataset outputs/datasets/softrobotics_rosbag_sqlite_v1 --format lerobot_stub
+python -m pipelines.export_dataset --dataset outputs/datasets/softrobotics_rosbag_sqlite_v1 --format hdf5_stub
 ```
 
-The demo writes generated artifacts under `outputs/`.
+These commands generate:
+
+- normalized dataset artifacts;
+- quality reports;
+- run metrics;
+- replay summaries;
+- Markdown and HTML reports;
+- a LeRobot-style export metadata stub;
+- an HDF5-ready packing-contract stub.
 
 ## Inputs
 
@@ -38,15 +53,13 @@ Config:
 configs/datasets/libero_debug.yaml
 ```
 
-Sample data:
+Sample input:
 
 ```text
 data/libero/debug/episodes.json
 ```
 
-This input provides a small set of instruction-conditioned episodes with task IDs, step counts, and reference outcomes.
-
-### ROS-Compatible Trace
+### ROSBag2 Metadata Fixture
 
 Config:
 
@@ -54,17 +67,31 @@ Config:
 configs/datasets/softrobotics_rosbag.yaml
 ```
 
-Sample data:
+Sample input:
 
 ```text
 data/rosbags/softrobotics_case/metadata.json
 ```
 
-This input represents a replay-only ROS-compatible case with topic mappings, task instructions, and reference outcomes.
+### ROSBag2 SQLite Fixture
 
-## Normalized Artifact Contract
+Config:
 
-After ingest, each source produces the same layout:
+```text
+configs/datasets/softrobotics_rosbag_sqlite.yaml
+```
+
+Generated input:
+
+```text
+data/rosbags/softrobotics_sqlite_case/rosbag2_fixture.db3
+```
+
+The SQLite fixture uses the standard ROSBag2 `topics` and `messages` schema and stores JSON payloads so the entire workflow stays software-only and CI-friendly.
+
+## Unified Artifact Contract
+
+Each normalized episode is written as:
 
 ```text
 outputs/datasets/<dataset_id>/episodes/<episode_id>/
@@ -72,76 +99,94 @@ outputs/datasets/<dataset_id>/episodes/<episode_id>/
   events.jsonl
   plan_trace.jsonl
   replay_stub.json
+  quality.json
   streams/
     action.json
     state.json
-    <observation_stream>.json
+    rgb.json
+    pressure.json
 ```
 
-This is the core design choice. Once data has been normalized into this contract, evaluation, replay, analysis, and reporting do not need source-specific code paths.
-
-## Evaluation Runs
-
-The demo runs three evaluations:
+At the dataset level, the stack also writes:
 
 ```text
-outputs/runs/libero_cached_eval
-outputs/runs/libero_perturbed_eval
-outputs/runs/softrobotics_rosbag_eval
-```
-
-The cached run provides a reference-style baseline. The perturbed run injects controlled degradation through adapter settings, which makes the comparison report show a clear regression. The ROS-compatible run proves that the same downstream path works outside the benchmark sample.
-
-Each run writes:
-
-```text
-run.json
-metrics.json
+dataset_manifest.json
 episodes.jsonl
-failure_tags.jsonl
-analysis.json
-report.md
-report.html
-episodes/<episode_id>/evaluation.json
-replays/<episode_id>/summary.json
-replays/<episode_id>/summary.md
+quality_report.json
+validation_report.json
 ```
 
-## Example Interpretation
+This makes ingest outputs directly usable by downstream evaluation, replay, export, and reporting commands.
 
-The benchmark comparison case compares:
+## What the Current Runs Show
+
+### Benchmark Comparison Insight
+
+The LIBERO comparison case contrasts:
 
 ```text
 outputs/runs/libero_cached_eval
 outputs/runs/libero_perturbed_eval
 ```
 
-The expected qualitative result is:
+The degraded run shows:
 
-- the perturbed policy has lower success and completion metrics;
-- action latency increases because of synthetic delay;
-- failures are tagged as control or planning-related;
-- one representative failed episode is surfaced with replay links.
+- lower success rate;
+- lower completion ratio;
+- higher action latency;
+- representative failures tagged as control or planning-related.
 
-The generated comparison report is:
+This is the policy-side signal: behavior regressed under controlled perturbation.
 
-```text
-outputs/comparisons/libero_comparison_case/comparison.html
-```
+### ROSBag2 Ingest Insight
 
-## What This Shows
+The ROSBag2 SQLite ingest path shows:
 
-This case study is not about maximizing benchmark performance. It shows research-engineering capability:
+- topic discovery from actual SQLite storage tables;
+- episode slicing from marker messages;
+- aligned `rgb`, `state`, `action`, `pressure`, and `instruction` streams;
+- per-episode `quality.json`;
+- dataset-level `quality_report.json`;
+- successful validation via `pipelines.validate_dataset`.
 
-- heterogeneous data normalization;
-- reproducible run configuration;
-- per-episode evidence artifacts;
-- failure ranking and tagging;
+This is the data-side signal: the stack can prove whether a failure should be interpreted as a policy issue or a data-quality issue.
+
+### Why the Combination Matters
+
+The important engineering point is not just that each path runs independently. The important point is that both paths now terminate in the same contracts:
+
+- normalized episodes;
+- quality evidence;
 - replayable summaries;
-- comparison-ready reporting.
+- comparison-ready reports.
 
-That makes the project useful as a compact example of infrastructure for embodied AI evaluation.
+That means policy regressions and ingest-quality problems can be analyzed in one language instead of two disconnected toolchains.
+
+## Representative Failure Story
+
+The strongest explanation chain in the current demo is:
+
+1. the perturbed benchmark run regresses in success and latency;
+2. the comparison report surfaces a representative failed episode;
+3. the replay summary shows keyframes, action preview, final progress, and failure tags;
+4. the ROSBag2 ingest path shows how aligned streams and quality evidence would let the same tooling separate policy failure from logging failure.
+
+This is exactly the kind of infrastructure a research lab needs when experiments start to accumulate multiple data sources and multiple policy variants.
+
+## Engineering Value
+
+This case study now demonstrates:
+
+- benchmark ingest;
+- ROSBag2 metadata ingest;
+- ROSBag2 SQLite storage ingest;
+- topic discovery and timestamp alignment;
+- quality reporting and validation;
+- learning-dataset export surfaces;
+- failure replay and comparison reporting.
+
+That makes the project substantially stronger than a simple benchmark wrapper or replay demo.
 
 ## Current Boundaries
 
-The ROS-compatible input is metadata-backed in this MVP. A production version would add a true rosbag/rosbag2 reader and richer media handling. The current version is still useful because the downstream contracts are already source-agnostic and can accept richer adapters later.
+The SQLite reader currently decodes JSON payload fixtures and preserves raw metadata for binary ROS messages. Full binary CDR deserialization and richer LeRobot/HDF5 exports are the main next steps toward a more production-like embodied data stack.

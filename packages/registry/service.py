@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import closing
 import sqlite3
 from pathlib import Path
 from typing import Any
@@ -78,7 +79,7 @@ def register_dataset(
     episodes_path: str | None = None,
 ) -> None:
     """Upsert one dataset record into the local registry."""
-    with _connect() as connection:
+    with closing(_connect()) as connection:
         connection.execute(
             """
             INSERT INTO datasets(dataset_id, source_type, source_root, output_root, episode_count, manifest_path, episodes_path)
@@ -118,7 +119,7 @@ def register_run(
     report_path: str | None = None,
 ) -> None:
     """Upsert one run record into the local registry."""
-    with _connect() as connection:
+    with closing(_connect()) as connection:
         connection.execute(
             """
             INSERT INTO runs(run_name, dataset_id, mode, policy_name, policy_adapter, output_root, episode_count, metrics_path, report_path)
@@ -151,7 +152,7 @@ def register_run(
 
 def attach_run_report(*, run_name: str, report_path: str) -> None:
     """Attach or update the generated report path for a run."""
-    with _connect() as connection:
+    with closing(_connect()) as connection:
         connection.execute(
             "UPDATE runs SET report_path = ? WHERE run_name = ?",
             (display_path(report_path), run_name),
@@ -169,7 +170,7 @@ def register_comparison(
     report_path: str,
 ) -> None:
     """Upsert one comparison record into the local registry."""
-    with _connect() as connection:
+    with closing(_connect()) as connection:
         connection.execute(
             """
             INSERT INTO comparisons(case_name, baseline_run, candidate_run, output_root, report_path)
@@ -195,7 +196,7 @@ def register_comparison(
 def registry_snapshot() -> dict[str, list[dict[str, Any]]]:
     """Return a JSON-serializable snapshot of the registry contents."""
     snapshot: dict[str, list[dict[str, Any]]] = {}
-    with _connect() as connection:
+    with closing(_connect()) as connection:
         for table in ("datasets", "runs", "comparisons"):
             rows = connection.execute(f"SELECT * FROM {table}").fetchall()
             snapshot[table] = [dict(row) for row in rows]

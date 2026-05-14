@@ -123,7 +123,7 @@ python -m pip install -e .
 For running the pytest suite as well:
 
 ```bash
-python -m pip install pytest
+python -m pip install -e .[dev]
 ```
 
 ### 3. Run the end-to-end demo
@@ -227,6 +227,12 @@ Export a LeRobot-style metadata stub:
 python -m pipelines.export_dataset --dataset outputs/datasets/softrobotics_rosbag_sqlite_v1 --format lerobot_stub
 ```
 
+Export an HDF5-compatible packing contract stub:
+
+```bash
+python -m pipelines.export_dataset --dataset outputs/datasets/softrobotics_rosbag_sqlite_v1 --format hdf5_stub
+```
+
 Export tabular action/state streams as JSONL plus Parquet when a Parquet engine is available:
 
 ```bash
@@ -317,6 +323,8 @@ If pytest is installed:
 ```bash
 python -m pytest -q
 ```
+
+The GitHub Actions smoke workflow runs `pytest`, generates the ROSBag2 SQLite fixture, ingests the SQLite-backed dataset, validates it, exports both LeRobot and HDF5 contract stubs, and then runs the end-to-end smoke script.
 
 ## Research Positioning
 
