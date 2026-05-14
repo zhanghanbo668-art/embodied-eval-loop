@@ -20,6 +20,8 @@ Run:
 python -m pip install -e .
 python -m pipelines.demo
 python scripts/run_smoke_checks.py
+python -m pipelines.validate_dataset --dataset outputs/datasets/softrobotics_rosbag_sqlite_v1
+python -m pipelines.export_dataset --dataset outputs/datasets/softrobotics_rosbag_sqlite_v1 --format lerobot_stub
 ```
 
 Optional:

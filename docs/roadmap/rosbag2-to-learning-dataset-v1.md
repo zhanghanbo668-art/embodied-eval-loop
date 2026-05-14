@@ -23,13 +23,17 @@ Implemented in the current v1 slice:
 - Aligned ROS stream artifacts under each episode folder.
 - Replay summaries that include ingest quality evidence.
 - Run reports that show ingest quality status for ranked failures.
+- Dataset validation CLI in `pipelines.validate_dataset`.
+- Learning-dataset export CLI in `pipelines.export_dataset`.
+- LeRobot-style metadata stub export.
+- Parquet-if-available action/state export with JSONL fallback.
 
 Still future work:
 
 - Binary rosbag2 / MCAP backend.
 - Full CDR message decoding for real binary ROS payloads.
 - MCAP backend.
-- Parquet or LeRobot-style export.
+- Full LeRobot dataset writer with media tensors.
 
 ## One-Line Version
 

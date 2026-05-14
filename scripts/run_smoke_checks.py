@@ -12,11 +12,13 @@ if str(REPO_ROOT) not in sys.path:
 from packages.analysis.service import analyze_run
 from packages.common.io import load_json
 from packages.eval_runner.service import compare_runs, run_evaluation
+from packages.exporters import export_dataset
 from packages.ingest.service import ingest_dataset
 from packages.replay.service import build_replay_artifacts
 from packages.registry.service import export_registry_snapshot, registry_snapshot
 from packages.reporting.comparison import build_comparison_report
 from packages.reporting.service import build_report
+from packages.validation import validate_dataset
 from scripts.create_rosbag2_sqlite_fixture import main as create_rosbag2_sqlite_fixture
 
 
@@ -28,6 +30,8 @@ def main() -> None:
     assert libero.episode_count == 3
     assert rosbag.episode_count == 2
     assert rosbag_sqlite.episode_count == 2
+    sqlite_validation = validate_dataset("outputs/datasets/softrobotics_rosbag_sqlite_v1")
+    sqlite_export = export_dataset("outputs/datasets/softrobotics_rosbag_sqlite_v1", export_format="lerobot_stub")
 
     cached = run_evaluation("configs/eval/libero_cached_eval.yaml")
     perturbed = run_evaluation("configs/eval/libero_perturbed_eval.yaml")
@@ -72,6 +76,9 @@ def main() -> None:
     assert rosbag_quality["pass_count"] == 2
     assert rosbag_sqlite_quality["pass_count"] == 2
     assert rosbag_sqlite_quality["episodes"][0]["stream_counts"]["rgb"] == 8
+    assert sqlite_validation.status == "pass"
+    assert sqlite_export.episode_count == 2
+    assert Path(sqlite_export.optional_artifacts["lerobot_metadata"]).exists()
     assert rosbag_episode_quality["reference_stream"] == "rgb"
     assert Path("outputs/datasets/softrobotics_rosbag_v1/episodes/ROSBAG_EP_0001/streams/pressure.json").exists()
     assert rosbag_replay_summary["quality"]["status"] == "pass"

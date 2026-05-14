@@ -14,6 +14,7 @@ This is research infrastructure, not a model-training project or a hardware demo
 - [Core Workflow](#core-workflow)
 - [Shared Episode Artifacts](#shared-episode-artifacts)
 - [Command Reference](#command-reference)
+- [Validation and Export](#validation-and-export)
 - [Reports and Demo Outputs](#reports-and-demo-outputs)
 - [Testing and Validation](#testing-and-validation)
 - [Research Positioning](#research-positioning)
@@ -41,6 +42,7 @@ The goal is to make embodied policy behavior easier to test, diagnose, and commu
 - Runs config-driven evaluations using cached or perturbed rollout adapters.
 - Produces reproducible run manifests, metrics, config snapshots, and per-episode evaluation artifacts.
 - Writes ROS ingest quality reports for missing topics, stale streams, alignment counts, and timestamp gaps.
+- Validates normalized datasets before evaluation and exports learning-dataset views.
 - Ranks failed episodes and assigns lightweight failure taxonomy tags.
 - Generates replay summaries with event timelines, keyframes, action previews, and plan segments.
 - Builds Markdown and HTML reports for individual runs and baseline-vs-candidate comparisons.
@@ -77,11 +79,13 @@ packages/
   analysis/              Failure ranking and tagging
   common/                Config and IO helpers
   eval_runner/           Evaluation runner and policy adapters
+  exporters/             Learning-dataset exports
   ingest/                Dataset normalization
   registry/              SQLite registry service
   replay/                Replay artifact generation
   reporting/             Run and comparison reports
   schemas/               Shared Pydantic records
+  validation/            Dataset validation checks
 pipelines/               CLI entry points
 scripts/                 Smoke validation script
 tests/                   Unit and smoke tests
@@ -201,6 +205,32 @@ python -m pipelines.ingest --config configs/datasets/libero_debug.yaml
 python -m pipelines.ingest --config configs/datasets/softrobotics_rosbag.yaml
 python scripts/create_rosbag2_sqlite_fixture.py
 python -m pipelines.ingest --config configs/datasets/softrobotics_rosbag_sqlite.yaml
+```
+
+## Validation and Export
+
+Validate a normalized dataset before using it downstream:
+
+```bash
+python -m pipelines.validate_dataset --dataset outputs/datasets/softrobotics_rosbag_sqlite_v1
+```
+
+Export a portable learning-dataset index:
+
+```bash
+python -m pipelines.export_dataset --dataset outputs/datasets/softrobotics_rosbag_sqlite_v1 --format learning_jsonl
+```
+
+Export a LeRobot-style metadata stub:
+
+```bash
+python -m pipelines.export_dataset --dataset outputs/datasets/softrobotics_rosbag_sqlite_v1 --format lerobot_stub
+```
+
+Export tabular action/state streams as JSONL plus Parquet when a Parquet engine is available:
+
+```bash
+python -m pipelines.export_dataset --dataset outputs/datasets/softrobotics_rosbag_sqlite_v1 --format parquet
 ```
 
 ### Run evaluations
