@@ -1,0 +1,9 @@
+name: perturbed_rollout
+adapter: perturbed_rollout
+base_artifacts_root: data/cached_rollouts/reference
+perturbations:
+  action_delay_steps: 1
+  drop_every_n_frames: 0
+  truncate_last_k_actions: 2
+metadata:
+  description: Synthetic degraded rollout used for failure-analysis demos.

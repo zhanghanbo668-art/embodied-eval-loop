@@ -1,0 +1,13 @@
+name: libero_debug
+source_type: libero
+root: data/libero/debug
+split: debug
+instruction_field: language
+task_field: task
+episode_id_field: episode_id
+observation_streams:
+  - rgb
+  - robot_state
+action_field: action
+output_dataset_id: libero_debug_v1
+notes: Small LIBERO slice for CPU-friendly ingest and evaluation demos.

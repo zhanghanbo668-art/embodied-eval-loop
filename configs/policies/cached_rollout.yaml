@@ -1,0 +1,6 @@
+name: cached_rollout
+adapter: cached_rollout
+artifacts_root: data/cached_rollouts/reference
+action_source: actions.jsonl
+metadata:
+  description: Replays cached policy outputs without running model inference.

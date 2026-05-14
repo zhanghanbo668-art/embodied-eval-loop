@@ -1,0 +1,14 @@
+run_name: libero_perturbed_eval
+mode: benchmark
+dataset_config: configs/datasets/libero_debug.yaml
+policy_config: configs/policies/perturbed_rollout.yaml
+taxonomy_config: configs/eval/failure_taxonomy_v0.yaml
+metrics:
+  - success_rate
+  - episode_length
+  - completion_ratio
+  - action_latency_ms
+report:
+  top_k_failures: 10
+  include_keyframes: true
+output_root: outputs/runs/libero_perturbed_eval

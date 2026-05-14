@@ -1,0 +1,29 @@
+[
+  {
+    "episode_id": "LIBERO_EP_0001",
+    "task": "pick_place",
+    "language": "pick up the block and place it in the tray",
+    "num_steps": 18,
+    "reference_success": true,
+    "reference_completion_ratio": 1.0,
+    "reference_action_latency_ms": 42
+  },
+  {
+    "episode_id": "LIBERO_EP_0002",
+    "task": "drawer_open",
+    "language": "open the drawer halfway",
+    "num_steps": 22,
+    "reference_success": true,
+    "reference_completion_ratio": 0.92,
+    "reference_action_latency_ms": 47
+  },
+  {
+    "episode_id": "LIBERO_EP_0003",
+    "task": "pick_place",
+    "language": "move the mug to the target area",
+    "num_steps": 26,
+    "reference_success": false,
+    "reference_completion_ratio": 0.54,
+    "reference_action_latency_ms": 53
+  }
+]

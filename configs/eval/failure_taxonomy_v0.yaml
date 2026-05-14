@@ -1,0 +1,26 @@
+tags:
+  - perception_miss
+  - instruction_grounding_mismatch
+  - planning_breakdown
+  - control_execution_mismatch
+  - environment_or_data_issue
+
+heuristics:
+  perception_miss:
+    hints:
+      - object never enters expected interaction state
+      - observation stream missing or stale near failure point
+  instruction_grounding_mismatch:
+    hints:
+      - action pattern inconsistent with task instruction
+  planning_breakdown:
+    hints:
+      - task decomposes correctly at first but fails mid-sequence
+  control_execution_mismatch:
+    hints:
+      - action sequence issued but state change is insufficient
+  environment_or_data_issue:
+    hints:
+      - corrupted media
+      - missing timestamps
+      - impossible state jumps

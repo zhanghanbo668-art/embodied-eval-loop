@@ -1,0 +1,14 @@
+run_name: softrobotics_rosbag_eval
+mode: rosbag_replay
+dataset_config: configs/datasets/softrobotics_rosbag.yaml
+policy_config: configs/policies/rosbag_reference.yaml
+taxonomy_config: configs/eval/failure_taxonomy_v0.yaml
+metrics:
+  - success_rate
+  - episode_length
+  - completion_ratio
+  - action_latency_ms
+report:
+  top_k_failures: 10
+  include_keyframes: true
+output_root: outputs/runs/softrobotics_rosbag_eval

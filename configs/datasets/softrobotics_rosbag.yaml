@@ -1,0 +1,13 @@
+name: softrobotics_rosbag
+source_type: rosbag2
+root: data/rosbags/softrobotics_case
+topics:
+  rgb: /camera/color/image_raw
+  state: /soft_robot/state
+  action: /soft_robot/command
+  instruction: /task_instruction
+sync:
+  reference_stream: rgb
+  tolerance_ms: 50
+output_dataset_id: softrobotics_rosbag_v1
+notes: Replay-only ROS-compatible case study; no live robot execution required.

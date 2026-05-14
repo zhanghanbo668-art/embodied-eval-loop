@@ -1,0 +1,6 @@
+name: rosbag_reference
+adapter: cached_rollout
+artifacts_root: data/cached_rollouts/reference
+action_source: actions.jsonl
+metadata:
+  description: Replay-only adapter for ROS-compatible traces using reference metadata.

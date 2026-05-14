@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "embodied-eval-loop"
+version = "0.1.0"
+description = "Software-only embodied evaluation stack MVP."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "jinja2>=3.1",
+  "pandas>=2.0",
+  "pydantic>=2.12",
+  "pyyaml>=6.0",
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["packages*", "pipelines*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

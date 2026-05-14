@@ -1,0 +1,11 @@
+name: softrobotics_case
+type: rosbag_replay
+dataset_config: configs/datasets/softrobotics_rosbag.yaml
+focus_streams:
+  - rgb
+  - state
+  - action
+analysis_questions:
+  - Where does commanded action diverge from observed state evolution?
+  - Are there timing or synchronization anomalies?
+  - Which episode segment is most useful for replay in a report?

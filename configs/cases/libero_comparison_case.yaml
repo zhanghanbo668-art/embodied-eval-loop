@@ -1,0 +1,11 @@
+name: libero_comparison_case
+type: benchmark_comparison
+baseline_run: outputs/runs/libero_cached_eval
+candidate_run: outputs/runs/libero_perturbed_eval
+focus_tasks:
+  - pick_place
+  - drawer_open
+questions:
+  - Which tasks regressed the most?
+  - What failure tag dominates the degraded run?
+  - Which episode best explains the regression?

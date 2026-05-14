@@ -1,0 +1,23 @@
+{
+  "bag_name": "softrobotics_case_001",
+  "episodes": [
+    {
+      "episode_id": "ROSBAG_EP_0001",
+      "task": "soft_grasp_adjustment",
+      "instruction": "increase pressure until stable contact is achieved",
+      "num_steps": 16,
+      "reference_success": true,
+      "reference_completion_ratio": 0.88,
+      "reference_action_latency_ms": 61
+    },
+    {
+      "episode_id": "ROSBAG_EP_0002",
+      "task": "soft_reach_alignment",
+      "instruction": "align the actuator with the target contour",
+      "num_steps": 19,
+      "reference_success": false,
+      "reference_completion_ratio": 0.46,
+      "reference_action_latency_ms": 73
+    }
+  ]
+}
