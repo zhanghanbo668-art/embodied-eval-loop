@@ -3,6 +3,7 @@
 from packages.adapters_rosbags.reader import (
     MetadataRosbagReader,
     RosbagReader,
+    SQLiteRosbag2Reader,
     SourceEpisode,
     TimestampedMessage,
     TopicInfo,
@@ -12,6 +13,7 @@ from packages.adapters_rosbags.reader import (
 __all__ = [
     "MetadataRosbagReader",
     "RosbagReader",
+    "SQLiteRosbag2Reader",
     "SourceEpisode",
     "TimestampedMessage",
     "TopicInfo",

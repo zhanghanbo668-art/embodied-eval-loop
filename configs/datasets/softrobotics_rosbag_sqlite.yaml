@@ -1,0 +1,25 @@
+name: softrobotics_rosbag_sqlite
+source_type: rosbag2
+reader: rosbag2_sqlite
+root: data/rosbags/softrobotics_sqlite_case
+database: rosbag2_fixture.db3
+topics:
+  rgb: /camera/color/image_raw
+  state: /soft_robot/state
+  action: /soft_robot/command
+  pressure: /soft_robot/pressure
+  instruction: /task_instruction
+  episode_marker: /episode_marker
+required_topics:
+  - rgb
+  - state
+  - action
+optional_topics:
+  - pressure
+  - instruction
+sync:
+  reference_stream: rgb
+  tolerance_ms: 50
+  step_period_ms: 125
+output_dataset_id: softrobotics_rosbag_sqlite_v1
+notes: ROSBag2 SQLite fixture using standard topics/messages tables with JSON payloads for software-only validation.

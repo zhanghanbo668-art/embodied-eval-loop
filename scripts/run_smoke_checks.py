@@ -17,13 +17,17 @@ from packages.replay.service import build_replay_artifacts
 from packages.registry.service import export_registry_snapshot, registry_snapshot
 from packages.reporting.comparison import build_comparison_report
 from packages.reporting.service import build_report
+from scripts.create_rosbag2_sqlite_fixture import main as create_rosbag2_sqlite_fixture
 
 
 def main() -> None:
+    create_rosbag2_sqlite_fixture()
     libero = ingest_dataset("configs/datasets/libero_debug.yaml")
     rosbag = ingest_dataset("configs/datasets/softrobotics_rosbag.yaml")
+    rosbag_sqlite = ingest_dataset("configs/datasets/softrobotics_rosbag_sqlite.yaml")
     assert libero.episode_count == 3
     assert rosbag.episode_count == 2
+    assert rosbag_sqlite.episode_count == 2
 
     cached = run_evaluation("configs/eval/libero_cached_eval.yaml")
     perturbed = run_evaluation("configs/eval/libero_perturbed_eval.yaml")
@@ -45,6 +49,7 @@ def main() -> None:
     episode_bundle = load_json("outputs/datasets/libero_debug_v1/episodes/LIBERO_EP_0001/episode.json")
     rosbag_quality = load_json("outputs/datasets/softrobotics_rosbag_v1/quality_report.json")
     rosbag_episode_quality = load_json("outputs/datasets/softrobotics_rosbag_v1/episodes/ROSBAG_EP_0001/quality.json")
+    rosbag_sqlite_quality = load_json("outputs/datasets/softrobotics_rosbag_sqlite_v1/quality_report.json")
     rosbag_replay_summary = load_json("outputs/runs/softrobotics_rosbag_eval/replays/ROSBAG_EP_0002/summary.json")
     run_manifest = load_json("outputs/runs/libero_cached_eval/run.json")
     replay_summary = load_json("outputs/runs/libero_cached_eval/replays/LIBERO_EP_0003/summary.json")
@@ -65,6 +70,8 @@ def main() -> None:
     assert episode_bundle["plan_trace_ref"]["path"] == "plan_trace.jsonl"
     assert Path("outputs/datasets/libero_debug_v1/episodes/LIBERO_EP_0001/streams/action.json").exists()
     assert rosbag_quality["pass_count"] == 2
+    assert rosbag_sqlite_quality["pass_count"] == 2
+    assert rosbag_sqlite_quality["episodes"][0]["stream_counts"]["rgb"] == 8
     assert rosbag_episode_quality["reference_stream"] == "rgb"
     assert Path("outputs/datasets/softrobotics_rosbag_v1/episodes/ROSBAG_EP_0001/streams/pressure.json").exists()
     assert rosbag_replay_summary["quality"]["status"] == "pass"

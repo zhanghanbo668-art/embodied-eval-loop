@@ -36,7 +36,7 @@ The goal is to make embodied policy behavior easier to test, diagnose, and commu
 ## Key Features
 
 - Ingests a small benchmark-style LIBERO slice.
-- Ingests a ROSBag2-style case through a reader abstraction with topic parsing and timestamp alignment.
+- Ingests ROSBag2-style cases through reader backends for metadata fixtures and SQLite `.db3` storage.
 - Normalizes both sources into a shared episode schema.
 - Runs config-driven evaluations using cached or perturbed rollout adapters.
 - Produces reproducible run manifests, metrics, config snapshots, and per-episode evaluation artifacts.
@@ -148,11 +148,12 @@ The demo flow exercises the full loop:
 
 1. `configs/datasets/libero_debug.yaml` ingests a benchmark-style sample.
 2. `configs/datasets/softrobotics_rosbag.yaml` ingests a ROSBag2-style sample through the metadata-backed reader.
-3. `configs/eval/libero_cached_eval.yaml` runs a cached rollout baseline.
-4. `configs/eval/libero_perturbed_eval.yaml` runs a degraded rollout for comparison.
-5. `configs/eval/softrobotics_rosbag_eval.yaml` runs a replay-style ROS-compatible case.
-6. `configs/eval/failure_taxonomy_v0.yaml` provides failure tags.
-7. `configs/cases/libero_comparison_case.yaml` defines the comparison case.
+3. `configs/datasets/softrobotics_rosbag_sqlite.yaml` ingests a generated ROSBag2 SQLite fixture through the SQLite reader.
+4. `configs/eval/libero_cached_eval.yaml` runs a cached rollout baseline.
+5. `configs/eval/libero_perturbed_eval.yaml` runs a degraded rollout for comparison.
+6. `configs/eval/softrobotics_rosbag_eval.yaml` runs a replay-style ROS-compatible case.
+7. `configs/eval/failure_taxonomy_v0.yaml` provides failure tags.
+8. `configs/cases/libero_comparison_case.yaml` defines the comparison case.
 
 ## Shared Episode Artifacts
 
@@ -198,6 +199,8 @@ For ROSBag2-style sources, the dataset root also writes `quality_report.json`. T
 ```bash
 python -m pipelines.ingest --config configs/datasets/libero_debug.yaml
 python -m pipelines.ingest --config configs/datasets/softrobotics_rosbag.yaml
+python scripts/create_rosbag2_sqlite_fixture.py
+python -m pipelines.ingest --config configs/datasets/softrobotics_rosbag_sqlite.yaml
 ```
 
 ### Run evaluations
@@ -299,7 +302,7 @@ It is intentionally scoped as a CPU-first software stack. It does not train poli
 
 ## Limitations
 
-- The bundled ROSBag2-style reader is metadata-backed for CI-friendly fixtures; a binary rosbag2 backend is the next adapter target.
+- The SQLite ROSBag2 reader can parse standard `topics` and `messages` tables and JSON payload fixtures; full binary CDR deserialization is the next adapter target.
 - Replay artifacts are textual and JSON-based; there is no heavy media viewer.
 - The sample datasets are small and intended for workflow demonstration.
 - Failure tags are heuristic and lightweight, not a learned root-cause model.
@@ -309,7 +312,7 @@ It is intentionally scoped as a CPU-first software stack. It does not train poli
 
 High-value next steps:
 
-- implement a true binary rosbag/rosbag2 reader backend behind the existing reader interface;
+- add full binary CDR message deserialization behind the existing SQLite reader interface;
 - write Parquet action and state streams for larger traces;
 - add an external-process policy adapter for real VLA wrappers;
 - add richer per-task metrics and failure clustering.

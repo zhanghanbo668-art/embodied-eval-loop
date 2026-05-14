@@ -19,7 +19,7 @@ dependencies = [
 include-package-data = true
 
 [tool.setuptools.packages.find]
-include = ["packages*", "pipelines*"]
+include = ["packages*", "pipelines*", "scripts*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

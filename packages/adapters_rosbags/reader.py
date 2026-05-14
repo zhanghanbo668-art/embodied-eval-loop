@@ -7,7 +7,9 @@ CI-friendly. Real ROSBag2 backends can implement the same protocol later.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from pathlib import Path
+import sqlite3
 from typing import Any, Iterable, Protocol
 
 from packages.common.io import load_json
@@ -195,6 +197,205 @@ class MetadataRosbagReader:
         return {"value": progress}
 
 
+class SQLiteRosbag2Reader:
+    """Reader for ROSBag2 SQLite storage.
+
+    This backend understands the standard ROSBag2 SQLite tables:
+
+    - `topics(id, name, type, serialization_format, offered_qos_profiles)`
+    - `messages(id, topic_id, timestamp, data)`
+
+    The backend can decode JSON payloads stored in `messages.data`, which keeps
+    tests software-only. For binary CDR payloads from real bags, it still exposes
+    topic discovery and timestamps with a raw payload marker, leaving message
+    deserialization to a future ROS-aware adapter.
+    """
+
+    def __init__(self, source_root: Path, config: dict[str, Any]) -> None:
+        self.source_root = source_root
+        self.config = config
+        self.db_path = source_root / str(config.get("database", config.get("db3", "rosbag2.db3")))
+        if not self.db_path.exists():
+            raise FileNotFoundError(f"Expected ROSBag2 SQLite database at {self.db_path}")
+        self.topic_map = {
+            str(alias): str(topic)
+            for alias, topic in dict(config.get("topics", {})).items()
+        }
+        self.required_aliases = {str(alias) for alias in config.get("required_topics", [])}
+        self.sync_config = dict(config.get("sync", {}))
+        self._topics_cache: list[TopicInfo] | None = None
+        self._topic_ids_by_alias: dict[str, int] | None = None
+
+    def topics(self) -> list[TopicInfo]:
+        """Return configured topics discovered in the SQLite storage."""
+        if self._topics_cache is not None:
+            return self._topics_cache
+
+        db_topics = self._load_db_topics()
+        infos: list[TopicInfo] = []
+        topic_ids_by_alias: dict[str, int] = {}
+        for alias, topic_name in self.topic_map.items():
+            row = db_topics.get(topic_name)
+            if row is None:
+                continue
+            topic_id, message_type = row
+            infos.append(
+                TopicInfo(
+                    name=topic_name,
+                    alias=alias,
+                    message_type=message_type,
+                    required=alias in self.required_aliases,
+                )
+            )
+            topic_ids_by_alias[alias] = topic_id
+        self._topics_cache = infos
+        self._topic_ids_by_alias = topic_ids_by_alias
+        return infos
+
+    def episodes(self) -> list[SourceEpisode]:
+        """Return episode windows from marker messages or config fallback."""
+        markers = list(self.messages("episode_marker")) if "episode_marker" in self.topic_map else []
+        episodes = self._episodes_from_markers(markers)
+        if episodes:
+            return episodes
+
+        configured = self.config.get("episodes", [])
+        if isinstance(configured, list) and configured:
+            return [self._episode_from_config(index, raw) for index, raw in enumerate(configured) if isinstance(raw, dict)]
+
+        start_time_ms, end_time_ms = self._message_time_bounds_ms()
+        step_period_ms = int(self.sync_config.get("step_period_ms", 125))
+        num_steps = max(1, int((end_time_ms - start_time_ms) / max(step_period_ms, 1)) + 1)
+        return [
+            SourceEpisode(
+                episode_id=str(self.config.get("default_episode_id", "ROSBAG_SQLITE_EP_0001")),
+                task_id=str(self.config.get("default_task_id", "unknown_task")),
+                instruction=str(self.config.get("default_instruction", "")),
+                start_time_ms=start_time_ms,
+                end_time_ms=end_time_ms,
+                num_steps=num_steps,
+                metadata={
+                    "reference_success": bool(self.config.get("reference_success", True)),
+                    "reference_completion_ratio": float(self.config.get("reference_completion_ratio", 1.0)),
+                    "reference_action_latency_ms": int(self.config.get("reference_action_latency_ms", 0)),
+                    "bag_name": self.db_path.name,
+                    "source_episode_index": 0,
+                },
+            )
+        ]
+
+    def messages(self, topic: str, episode_id: str | None = None) -> Iterable[TimestampedMessage]:
+        """Yield timestamped messages for one configured topic alias."""
+        topic_ids = self._topic_ids()
+        topic_id = topic_ids.get(topic)
+        if topic_id is None:
+            return
+
+        window = self._episode_window(episode_id) if episode_id else None
+        with sqlite3.connect(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT timestamp, data
+                FROM messages
+                WHERE topic_id = ?
+                ORDER BY timestamp ASC
+                """,
+                (topic_id,),
+            ).fetchall()
+
+        for timestamp_ns, data in rows:
+            timestamp_ms = _timestamp_to_ms(int(timestamp_ns))
+            if window and not (window[0] <= timestamp_ms <= window[1]):
+                continue
+            yield TimestampedMessage(
+                topic=topic,
+                timestamp_ms=timestamp_ms,
+                payload=_decode_sqlite_payload(data),
+            )
+
+    def _load_db_topics(self) -> dict[str, tuple[int, str]]:
+        with sqlite3.connect(self.db_path) as connection:
+            rows = connection.execute("SELECT id, name, type FROM topics").fetchall()
+        return {str(name): (int(topic_id), str(message_type)) for topic_id, name, message_type in rows}
+
+    def _topic_ids(self) -> dict[str, int]:
+        if self._topic_ids_by_alias is None:
+            self.topics()
+        return self._topic_ids_by_alias or {}
+
+    def _episodes_from_markers(self, markers: list[TimestampedMessage]) -> list[SourceEpisode]:
+        by_episode: dict[str, dict[str, TimestampedMessage]] = {}
+        for marker in markers:
+            episode_id = str(marker.payload.get("episode_id", ""))
+            event = str(marker.payload.get("event", ""))
+            if not episode_id or event not in {"start", "end"}:
+                continue
+            by_episode.setdefault(episode_id, {})[event] = marker
+
+        episodes: list[SourceEpisode] = []
+        for index, episode_id in enumerate(sorted(by_episode)):
+            pair = by_episode[episode_id]
+            if "start" not in pair or "end" not in pair:
+                continue
+            start = pair["start"]
+            end = pair["end"]
+            payload = start.payload | end.payload
+            step_period_ms = int(self.sync_config.get("step_period_ms", 125))
+            num_steps = int(payload.get("num_steps", max(1, int((end.timestamp_ms - start.timestamp_ms) / step_period_ms) + 1)))
+            episodes.append(
+                SourceEpisode(
+                    episode_id=episode_id,
+                    task_id=str(payload.get("task", payload.get("task_id", "unknown_task"))),
+                    instruction=str(payload.get("instruction", "")),
+                    start_time_ms=start.timestamp_ms,
+                    end_time_ms=end.timestamp_ms,
+                    num_steps=num_steps,
+                    metadata={
+                        "reference_success": bool(payload.get("reference_success", True)),
+                        "reference_completion_ratio": float(payload.get("reference_completion_ratio", 1.0)),
+                        "reference_action_latency_ms": int(payload.get("reference_action_latency_ms", 0)),
+                        "bag_name": self.db_path.name,
+                        "source_episode_index": index,
+                    },
+                )
+            )
+        return episodes
+
+    def _episode_from_config(self, index: int, raw: dict[str, Any]) -> SourceEpisode:
+        start_time_ms = int(raw.get("start_time_ms", 0))
+        end_time_ms = int(raw.get("end_time_ms", start_time_ms))
+        return SourceEpisode(
+            episode_id=str(raw.get("episode_id", f"ROSBAG_SQLITE_EP_{index + 1:04d}")),
+            task_id=str(raw.get("task", raw.get("task_id", "unknown_task"))),
+            instruction=str(raw.get("instruction", "")),
+            start_time_ms=start_time_ms,
+            end_time_ms=end_time_ms,
+            num_steps=int(raw.get("num_steps", 0)),
+            metadata={
+                "reference_success": bool(raw.get("reference_success", True)),
+                "reference_completion_ratio": float(raw.get("reference_completion_ratio", 1.0)),
+                "reference_action_latency_ms": int(raw.get("reference_action_latency_ms", 0)),
+                "bag_name": self.db_path.name,
+                "source_episode_index": index,
+            },
+        )
+
+    def _episode_window(self, episode_id: str | None) -> tuple[int, int] | None:
+        if episode_id is None:
+            return None
+        for episode in self.episodes():
+            if episode.episode_id == episode_id:
+                return episode.start_time_ms, episode.end_time_ms
+        return None
+
+    def _message_time_bounds_ms(self) -> tuple[int, int]:
+        with sqlite3.connect(self.db_path) as connection:
+            row = connection.execute("SELECT MIN(timestamp), MAX(timestamp) FROM messages").fetchone()
+        if not row or row[0] is None or row[1] is None:
+            return 0, 0
+        return _timestamp_to_ms(int(row[0])), _timestamp_to_ms(int(row[1]))
+
+
 def _action_token(task_id: str, step: int) -> str:
     templates = {
         "soft_grasp_adjustment": ["sense", "approach", "pressurize", "stabilize"],
@@ -209,8 +410,33 @@ def load_rosbag_reader(source_root: Path, config: dict[str, Any]) -> RosbagReade
     reader_type = str(config.get("reader", "metadata"))
     if reader_type == "metadata":
         return MetadataRosbagReader(source_root, config)
-    if reader_type == "rosbag2":
-        raise NotImplementedError(
-            "Real rosbag2 backend is not bundled. Use reader: metadata for CI-friendly fixtures."
-        )
+    if reader_type in {"rosbag2", "sqlite", "rosbag2_sqlite"}:
+        return SQLiteRosbag2Reader(source_root, config)
     raise ValueError(f"Unsupported rosbag reader: {reader_type}")
+
+
+def _timestamp_to_ms(timestamp: int) -> int:
+    """Convert ROSBag2 nanosecond timestamps to milliseconds when needed."""
+    if timestamp > 10_000_000_000:
+        return int(timestamp / 1_000_000)
+    return int(timestamp)
+
+
+def _decode_sqlite_payload(data: Any) -> dict[str, Any]:
+    """Decode JSON fixture payloads or preserve raw binary metadata."""
+    if data is None:
+        return {}
+    if isinstance(data, memoryview):
+        data = data.tobytes()
+    if isinstance(data, bytes):
+        try:
+            text = data.decode("utf-8")
+        except UnicodeDecodeError:
+            return {"raw_bytes": len(data), "encoding": "cdr"}
+    else:
+        text = str(data)
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        return {"value": text}
+    return payload if isinstance(payload, dict) else {"value": payload}

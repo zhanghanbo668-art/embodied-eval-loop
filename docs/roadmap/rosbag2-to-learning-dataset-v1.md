@@ -12,6 +12,9 @@ Implemented in the current v1 slice:
 
 - ROSBag-style reader abstraction in `packages/adapters_rosbags/reader.py`.
 - Metadata-backed reader for CI-friendly ROSBag2-style fixtures.
+- SQLite ROSBag2 reader for standard `topics` and `messages` storage tables.
+- JSON payload decoding for software-only `.db3` fixtures.
+- Raw binary payload preservation for future CDR deserialization.
 - Topic discovery for configured ROS aliases such as `rgb`, `state`, `action`, `pressure`, and `instruction`.
 - Timestamped message iteration per topic and episode.
 - Nearest-neighbor timestamp alignment with configurable tolerance.
@@ -24,7 +27,8 @@ Implemented in the current v1 slice:
 Still future work:
 
 - Binary rosbag2 / MCAP backend.
-- Broader ROS message type decoding.
+- Full CDR message decoding for real binary ROS payloads.
+- MCAP backend.
 - Parquet or LeRobot-style export.
 
 ## One-Line Version

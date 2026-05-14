@@ -5,6 +5,7 @@ Use this checklist before making the repository public.
 ## Repository Hygiene
 
 - [ ] `outputs/` is ignored and generated artifacts are not committed.
+- [ ] Generated ROSBag2 SQLite fixtures such as `data/rosbags/softrobotics_sqlite_case/*.db3` are ignored; regenerate them with `python scripts/create_rosbag2_sqlite_fixture.py`.
 - [ ] `__pycache__/`, `*.pyc`, `.pytest_cache/`, virtual environments, and editor files are ignored.
 - [ ] No private datasets, credentials, tokens, or personal paths are committed.
 - [ ] `README.md` explains the problem, workflow, setup, commands, and limitations.
