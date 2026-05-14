@@ -4,6 +4,12 @@
 
 Treat this as a software-only evaluation and failure-analysis control plane for embodied AI workflows.
 
+## V1 Upgrade Target
+
+The next high-value upgrade is documented in `docs/roadmap/rosbag2-to-learning-dataset-v1.md`.
+
+Short version: extend the current evaluation stack with a ROSBag2-to-learning-dataset conversion path that adds topic parsing, timestamp alignment, episode slicing, quality checks, and export hooks while preserving the existing replay, analysis, and reporting flow.
+
 ## Week 1 - Scope freeze, schema, ingest MVP
 
 **Deliverables**

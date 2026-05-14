@@ -25,3 +25,6 @@ dist/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Local private application materials
+Hanbo_Zhang_CV.pdf

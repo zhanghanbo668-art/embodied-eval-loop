@@ -305,11 +305,12 @@ It is intentionally scoped as a CPU-first software stack. It does not train poli
 
 High-value next steps:
 
-- add a true rosbag/rosbag2 reader adapter;
+- implement the ROSBag2-to-learning-dataset v1 plan in `docs/roadmap/rosbag2-to-learning-dataset-v1.md`;
+- add a true rosbag/rosbag2 reader adapter behind the existing ROS-compatible ingest path;
+- add timestamp alignment and quality checks for multimodal robot logs;
 - write Parquet action and state streams for larger traces;
 - add an external-process policy adapter for real VLA wrappers;
-- add richer per-task metrics and failure clustering;
-- publish a short technical note showing one concrete failure-analysis case.
+- add richer per-task metrics and failure clustering.
 
 ## License
 
