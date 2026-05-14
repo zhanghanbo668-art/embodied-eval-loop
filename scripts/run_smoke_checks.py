@@ -19,17 +19,23 @@ from packages.registry.service import export_registry_snapshot, registry_snapsho
 from packages.reporting.comparison import build_comparison_report
 from packages.reporting.service import build_report
 from packages.validation import validate_dataset
+from scripts.create_rosbag2_cdr_fixture import main as create_rosbag2_cdr_fixture
 from scripts.create_rosbag2_sqlite_fixture import main as create_rosbag2_sqlite_fixture
 
 
 def main() -> None:
     create_rosbag2_sqlite_fixture()
+    create_rosbag2_cdr_fixture()
     libero = ingest_dataset("configs/datasets/libero_debug.yaml")
     rosbag = ingest_dataset("configs/datasets/softrobotics_rosbag.yaml")
     rosbag_sqlite = ingest_dataset("configs/datasets/softrobotics_rosbag_sqlite.yaml")
+    rosbag_cdr = ingest_dataset("configs/datasets/softrobotics_rosbag_cdr.yaml")
+    rosbag_mcap = ingest_dataset("configs/datasets/softrobotics_rosbag_mcap.yaml")
     assert libero.episode_count == 3
     assert rosbag.episode_count == 2
     assert rosbag_sqlite.episode_count == 2
+    assert rosbag_cdr.episode_count == 2
+    assert rosbag_mcap.episode_count == 2
     sqlite_validation = validate_dataset("outputs/datasets/softrobotics_rosbag_sqlite_v1")
     sqlite_export = export_dataset("outputs/datasets/softrobotics_rosbag_sqlite_v1", export_format="lerobot_stub")
     sqlite_hdf5 = export_dataset("outputs/datasets/softrobotics_rosbag_sqlite_v1", export_format="hdf5_stub")
@@ -55,6 +61,8 @@ def main() -> None:
     rosbag_quality = load_json("outputs/datasets/softrobotics_rosbag_v1/quality_report.json")
     rosbag_episode_quality = load_json("outputs/datasets/softrobotics_rosbag_v1/episodes/ROSBAG_EP_0001/quality.json")
     rosbag_sqlite_quality = load_json("outputs/datasets/softrobotics_rosbag_sqlite_v1/quality_report.json")
+    rosbag_cdr_quality = load_json("outputs/datasets/softrobotics_rosbag_cdr_v1/quality_report.json")
+    rosbag_mcap_quality = load_json("outputs/datasets/softrobotics_rosbag_mcap_v1/quality_report.json")
     rosbag_replay_summary = load_json("outputs/runs/softrobotics_rosbag_eval/replays/ROSBAG_EP_0002/summary.json")
     run_manifest = load_json("outputs/runs/libero_cached_eval/run.json")
     replay_summary = load_json("outputs/runs/libero_cached_eval/replays/LIBERO_EP_0003/summary.json")
@@ -77,6 +85,9 @@ def main() -> None:
     assert rosbag_quality["pass_count"] == 2
     assert rosbag_sqlite_quality["pass_count"] == 2
     assert rosbag_sqlite_quality["episodes"][0]["stream_counts"]["rgb"] == 8
+    assert rosbag_cdr_quality["pass_count"] == 2
+    assert rosbag_cdr_quality["episodes"][0]["stream_counts"]["rgb"] == 6
+    assert rosbag_mcap_quality["pass_count"] == 2
     assert sqlite_validation.status == "pass"
     assert sqlite_export.episode_count == 2
     assert Path(sqlite_export.optional_artifacts["lerobot_metadata"]).exists()

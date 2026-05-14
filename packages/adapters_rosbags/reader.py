@@ -397,6 +397,216 @@ class SQLiteRosbag2Reader:
         return _timestamp_to_ms(int(row[0])), _timestamp_to_ms(int(row[1]))
 
 
+class RosbagsRosbag2Reader:
+    """Reader for real ROSBag2 directories via the optional `rosbags` package.
+
+    This backend reads rosbag2 metadata directories and can deserialize CDR
+    payloads from both sqlite3 and MCAP storage plugins when `rosbags` is
+    installed. It intentionally keeps decoded payloads in the same lightweight
+    dictionaries used by the rest of the pipeline.
+    """
+
+    def __init__(self, source_root: Path, config: dict[str, Any]) -> None:
+        try:
+            from rosbags.rosbag2 import Reader
+            from rosbags.typesys import Stores, get_typestore
+        except ImportError as exc:
+            raise ImportError(
+                "The rosbags-backed reader requires the optional dependency group: "
+                "python -m pip install -e .[rosbag]"
+            ) from exc
+
+        self.source_root = source_root
+        self.config = config
+        self.bag_path = source_root / str(config.get("bag_path", "."))
+        if not self.bag_path.exists():
+            raise FileNotFoundError(f"Expected ROSBag2 directory at {self.bag_path}")
+        self._reader_cls = Reader
+        self.typestore = get_typestore(Stores.LATEST)
+        self.topic_map = {
+            str(alias): str(topic)
+            for alias, topic in dict(config.get("topics", {})).items()
+        }
+        self.required_aliases = {str(alias) for alias in config.get("required_topics", [])}
+        self.sync_config = dict(config.get("sync", {}))
+        self._topics_cache: list[TopicInfo] | None = None
+        self._connections_by_alias: dict[str, Any] | None = None
+        self._episodes_cache: list[SourceEpisode] | None = None
+
+    def topics(self) -> list[TopicInfo]:
+        """Return configured topics discovered in the rosbag2 metadata."""
+        if self._topics_cache is not None:
+            return self._topics_cache
+
+        with self._reader_cls(self.bag_path) as reader:
+            connections = list(reader.connections)
+
+        infos: list[TopicInfo] = []
+        by_alias: dict[str, Any] = {}
+        for alias, topic_name in self.topic_map.items():
+            connection = next((conn for conn in connections if conn.topic == topic_name), None)
+            if connection is None:
+                continue
+            infos.append(
+                TopicInfo(
+                    name=topic_name,
+                    alias=alias,
+                    message_type=str(connection.msgtype),
+                    required=alias in self.required_aliases,
+                )
+            )
+            by_alias[alias] = connection
+        self._topics_cache = infos
+        self._connections_by_alias = by_alias
+        return infos
+
+    def episodes(self) -> list[SourceEpisode]:
+        """Return episode windows from marker messages or config fallback."""
+        if self._episodes_cache is not None:
+            return self._episodes_cache
+
+        markers = list(self.messages("episode_marker")) if "episode_marker" in self.topic_map else []
+        episodes = self._episodes_from_markers(markers)
+        if episodes:
+            self._episodes_cache = episodes
+            return episodes
+
+        configured = self.config.get("episodes", [])
+        if isinstance(configured, list) and configured:
+            episodes = [self._episode_from_config(index, raw) for index, raw in enumerate(configured) if isinstance(raw, dict)]
+            self._episodes_cache = episodes
+            return episodes
+
+        start_time_ms, end_time_ms = self._message_time_bounds_ms()
+        step_period_ms = int(self.sync_config.get("step_period_ms", 125))
+        num_steps = max(1, int((end_time_ms - start_time_ms) / max(step_period_ms, 1)) + 1)
+        episodes = [
+            SourceEpisode(
+                episode_id=str(self.config.get("default_episode_id", "ROSBAG_CDR_EP_0001")),
+                task_id=str(self.config.get("default_task_id", "unknown_task")),
+                instruction=str(self.config.get("default_instruction", "")),
+                start_time_ms=start_time_ms,
+                end_time_ms=end_time_ms,
+                num_steps=num_steps,
+                metadata={
+                    "reference_success": bool(self.config.get("reference_success", True)),
+                    "reference_completion_ratio": float(self.config.get("reference_completion_ratio", 1.0)),
+                    "reference_action_latency_ms": int(self.config.get("reference_action_latency_ms", 0)),
+                    "bag_name": self.bag_path.name,
+                    "source_episode_index": 0,
+                },
+            )
+        ]
+        self._episodes_cache = episodes
+        return episodes
+
+    def messages(self, topic: str, episode_id: str | None = None) -> Iterable[TimestampedMessage]:
+        """Yield decoded CDR messages for one configured topic alias."""
+        connection = self._connections().get(topic)
+        if connection is None:
+            return
+
+        window = self._episode_window(episode_id) if episode_id else None
+        with self._reader_cls(self.bag_path) as reader:
+            for conn, timestamp_ns, raw in reader.messages(connections=[connection]):
+                timestamp_ms = _timestamp_to_ms(int(timestamp_ns))
+                if window and not (window[0] <= timestamp_ms <= window[1]):
+                    continue
+                yield TimestampedMessage(
+                    topic=topic,
+                    timestamp_ms=timestamp_ms,
+                    payload=self._decode_cdr_payload(raw, str(conn.msgtype)),
+                )
+
+    def _connections(self) -> dict[str, Any]:
+        if self._connections_by_alias is None:
+            self.topics()
+        return self._connections_by_alias or {}
+
+    def _decode_cdr_payload(self, raw: bytes | memoryview, message_type: str) -> dict[str, Any]:
+        try:
+            message = self.typestore.deserialize_cdr(raw, message_type)
+        except Exception:
+            return {"raw_bytes": len(raw), "encoding": "cdr", "message_type": message_type}
+        return _ros_message_to_payload(message, message_type)
+
+    def _episodes_from_markers(self, markers: list[TimestampedMessage]) -> list[SourceEpisode]:
+        by_episode: dict[str, dict[str, TimestampedMessage]] = {}
+        for marker in markers:
+            marker_payload = _parse_marker_payload(marker.payload)
+            episode_id = str(marker_payload.get("episode_id", ""))
+            event = str(marker_payload.get("event", ""))
+            if not episode_id or event not in {"start", "end"}:
+                continue
+            marker = TimestampedMessage(marker.topic, marker.timestamp_ms, marker_payload)
+            by_episode.setdefault(episode_id, {})[event] = marker
+
+        episodes: list[SourceEpisode] = []
+        for index, episode_id in enumerate(sorted(by_episode)):
+            pair = by_episode[episode_id]
+            if "start" not in pair or "end" not in pair:
+                continue
+            start = pair["start"]
+            end = pair["end"]
+            payload = start.payload | end.payload
+            step_period_ms = int(self.sync_config.get("step_period_ms", 125))
+            num_steps = int(payload.get("num_steps", max(1, int((end.timestamp_ms - start.timestamp_ms) / step_period_ms) + 1)))
+            episodes.append(
+                SourceEpisode(
+                    episode_id=episode_id,
+                    task_id=str(payload.get("task", payload.get("task_id", "unknown_task"))),
+                    instruction=str(payload.get("instruction", "")),
+                    start_time_ms=start.timestamp_ms,
+                    end_time_ms=end.timestamp_ms,
+                    num_steps=num_steps,
+                    metadata={
+                        "reference_success": bool(payload.get("reference_success", True)),
+                        "reference_completion_ratio": float(payload.get("reference_completion_ratio", 1.0)),
+                        "reference_action_latency_ms": int(payload.get("reference_action_latency_ms", 0)),
+                        "bag_name": self.bag_path.name,
+                        "source_episode_index": index,
+                        "serialization": "cdr",
+                    },
+                )
+            )
+        return episodes
+
+    def _episode_from_config(self, index: int, raw: dict[str, Any]) -> SourceEpisode:
+        start_time_ms = int(raw.get("start_time_ms", 0))
+        end_time_ms = int(raw.get("end_time_ms", start_time_ms))
+        return SourceEpisode(
+            episode_id=str(raw.get("episode_id", f"ROSBAG_CDR_EP_{index + 1:04d}")),
+            task_id=str(raw.get("task", raw.get("task_id", "unknown_task"))),
+            instruction=str(raw.get("instruction", "")),
+            start_time_ms=start_time_ms,
+            end_time_ms=end_time_ms,
+            num_steps=int(raw.get("num_steps", 0)),
+            metadata={
+                "reference_success": bool(raw.get("reference_success", True)),
+                "reference_completion_ratio": float(raw.get("reference_completion_ratio", 1.0)),
+                "reference_action_latency_ms": int(raw.get("reference_action_latency_ms", 0)),
+                "bag_name": self.bag_path.name,
+                "source_episode_index": index,
+                "serialization": "cdr",
+            },
+        )
+
+    def _episode_window(self, episode_id: str | None) -> tuple[int, int] | None:
+        if episode_id is None:
+            return None
+        for episode in self.episodes():
+            if episode.episode_id == episode_id:
+                return episode.start_time_ms, episode.end_time_ms
+        return None
+
+    def _message_time_bounds_ms(self) -> tuple[int, int]:
+        with self._reader_cls(self.bag_path) as reader:
+            timestamps = [timestamp for _, timestamp, _ in reader.messages()]
+        if not timestamps:
+            return 0, 0
+        return _timestamp_to_ms(min(timestamps)), _timestamp_to_ms(max(timestamps))
+
+
 def _action_token(task_id: str, step: int) -> str:
     templates = {
         "soft_grasp_adjustment": ["sense", "approach", "pressurize", "stabilize"],
@@ -413,6 +623,8 @@ def load_rosbag_reader(source_root: Path, config: dict[str, Any]) -> RosbagReade
         return MetadataRosbagReader(source_root, config)
     if reader_type in {"rosbag2", "sqlite", "rosbag2_sqlite"}:
         return SQLiteRosbag2Reader(source_root, config)
+    if reader_type in {"rosbags", "rosbags_rosbag2", "rosbag2_cdr", "mcap"}:
+        return RosbagsRosbag2Reader(source_root, config)
     raise ValueError(f"Unsupported rosbag reader: {reader_type}")
 
 
@@ -441,3 +653,88 @@ def _decode_sqlite_payload(data: Any) -> dict[str, Any]:
     except json.JSONDecodeError:
         return {"value": text}
     return payload if isinstance(payload, dict) else {"value": payload}
+
+
+def _parse_marker_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    if isinstance(payload.get("data"), str):
+        try:
+            parsed = json.loads(str(payload["data"]))
+        except json.JSONDecodeError:
+            return payload
+        if isinstance(parsed, dict):
+            return parsed
+    return payload
+
+
+def _ros_message_to_payload(message: Any, message_type: str) -> dict[str, Any]:
+    if message_type == "std_msgs/msg/String":
+        text = str(getattr(message, "data", ""))
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError:
+            return {"data": text, "text": text}
+        if isinstance(parsed, dict):
+            return {"data": text, "text": text, **parsed}
+        return {"data": text, "text": text, "value": parsed}
+    if message_type == "sensor_msgs/msg/Image":
+        data = getattr(message, "data", [])
+        return {
+            "frame_id": str(getattr(getattr(message, "header", None), "frame_id", "")),
+            "height": int(getattr(message, "height", 0)),
+            "width": int(getattr(message, "width", 0)),
+            "encoding": str(getattr(message, "encoding", "")),
+            "is_bigendian": int(getattr(message, "is_bigendian", 0)),
+            "step_bytes": int(getattr(message, "step", 0)),
+            "data_bytes": int(getattr(data, "size", len(data) if hasattr(data, "__len__") else 0)),
+        }
+    if message_type == "sensor_msgs/msg/JointState":
+        names = list(getattr(message, "name", []))
+        positions = _numeric_sequence(getattr(message, "position", []))
+        payload = {
+            "name": list(getattr(message, "name", [])),
+            "position": positions,
+            "velocity": _numeric_sequence(getattr(message, "velocity", [])),
+            "effort": _numeric_sequence(getattr(message, "effort", [])),
+        }
+        for name, value in zip(names, positions):
+            payload[str(name)] = value
+        if "progress" in payload:
+            payload["contact"] = float(payload["progress"]) > 0.25
+        return payload
+    if message_type == "sensor_msgs/msg/FluidPressure":
+        return {
+            "kpa": round(float(getattr(message, "fluid_pressure", 0.0)) / 1000.0, 4),
+            "fluid_pressure": float(getattr(message, "fluid_pressure", 0.0)),
+            "variance": float(getattr(message, "variance", 0.0)),
+        }
+    return _object_to_jsonable(message)
+
+
+def _object_to_jsonable(value: Any) -> dict[str, Any]:
+    annotations = getattr(value, "__annotations__", {})
+    payload: dict[str, Any] = {}
+    for key in annotations:
+        if key.startswith("__"):
+            continue
+        payload[key] = _jsonable_value(getattr(value, key, None))
+    return payload
+
+
+def _jsonable_value(value: Any) -> Any:
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    if hasattr(value, "tolist"):
+        return value.tolist()
+    if isinstance(value, (list, tuple)):
+        return [_jsonable_value(item) for item in value]
+    if isinstance(value, dict):
+        return {str(key): _jsonable_value(item) for key, item in value.items()}
+    if getattr(value, "__annotations__", None):
+        return _object_to_jsonable(value)
+    return str(value)
+
+
+def _numeric_sequence(value: Any) -> list[float]:
+    if hasattr(value, "tolist"):
+        value = value.tolist()
+    return [float(item) for item in value]

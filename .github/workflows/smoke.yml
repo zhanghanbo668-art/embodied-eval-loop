@@ -22,7 +22,7 @@ jobs:
       - name: Install package
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e .[dev]
+          python -m pip install -e .[dev,rosbag]
 
       - name: Run pytest suite
         run: python -m pytest -q
@@ -30,8 +30,17 @@ jobs:
       - name: Generate ROSBag2 SQLite fixture
         run: python scripts/create_rosbag2_sqlite_fixture.py
 
+      - name: Generate ROSBag2 CDR fixtures
+        run: python scripts/create_rosbag2_cdr_fixture.py
+
       - name: Ingest ROSBag2 SQLite fixture
         run: python -m pipelines.ingest --config configs/datasets/softrobotics_rosbag_sqlite.yaml
+
+      - name: Ingest ROSBag2 CDR fixture
+        run: python -m pipelines.ingest --config configs/datasets/softrobotics_rosbag_cdr.yaml
+
+      - name: Ingest ROSBag2 MCAP fixture
+        run: python -m pipelines.ingest --config configs/datasets/softrobotics_rosbag_mcap.yaml
 
       - name: Run demo
         run: python -m pipelines.demo

@@ -14,7 +14,8 @@ Implemented in the current v1 slice:
 - Metadata-backed reader for CI-friendly ROSBag2-style fixtures.
 - SQLite ROSBag2 reader for standard `topics` and `messages` storage tables.
 - JSON payload decoding for software-only `.db3` fixtures.
-- Raw binary payload preservation for future CDR deserialization.
+- Raw binary payload preservation in the lightweight SQLite reader.
+- Optional `rosbags` backend for CDR-deserialized ROSBag2 sqlite3 and MCAP fixtures.
 - Topic discovery for configured ROS aliases such as `rgb`, `state`, `action`, `pressure`, and `instruction`.
 - Timestamped message iteration per topic and episode.
 - Nearest-neighbor timestamp alignment with configurable tolerance.
@@ -28,13 +29,11 @@ Implemented in the current v1 slice:
 - LeRobot-style metadata stub export.
 - HDF5-compatible packing-contract stub export.
 - Parquet-if-available action/state export with JSONL fallback.
-- GitHub Actions smoke workflow that installs the package, runs `pytest`, generates the ROSBag2 SQLite fixture, ingests it, validates it, exports dataset views, and runs smoke checks.
+- GitHub Actions smoke workflow that installs the package, runs `pytest`, generates ROSBag2 SQLite/CDR/MCAP fixtures, ingests them, validates outputs, exports dataset views, and runs smoke checks.
 
 Still future work:
 
-- Binary rosbag2 / MCAP backend.
-- Full CDR message decoding for real binary ROS payloads.
-- MCAP backend.
+- Broader custom ROS message decoding beyond the common message families used in fixtures.
 - Full LeRobot dataset writer with media tensors.
 
 ## One-Line Version

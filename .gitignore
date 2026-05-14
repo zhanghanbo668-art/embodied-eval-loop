@@ -1,6 +1,8 @@
 # Generated evaluation artifacts
 outputs/
 data/rosbags/softrobotics_sqlite_case/*.db3
+data/rosbags/softrobotics_cdr_case/
+data/rosbags/softrobotics_mcap_case/
 
 # Python bytecode and caches
 *.py[cod]

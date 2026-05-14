@@ -17,10 +17,13 @@ Use this checklist before making the repository public.
 Run:
 
 ```bash
-python -m pip install -e .[dev]
+python -m pip install -e .[dev,rosbag]
 python -m pytest -q
 python scripts/create_rosbag2_sqlite_fixture.py
+python scripts/create_rosbag2_cdr_fixture.py
 python -m pipelines.ingest --config configs/datasets/softrobotics_rosbag_sqlite.yaml
+python -m pipelines.ingest --config configs/datasets/softrobotics_rosbag_cdr.yaml
+python -m pipelines.ingest --config configs/datasets/softrobotics_rosbag_mcap.yaml
 python -m pipelines.demo
 python scripts/run_smoke_checks.py
 python -m pipelines.validate_dataset --dataset outputs/datasets/softrobotics_rosbag_sqlite_v1
@@ -49,7 +52,7 @@ This repository already includes an enabled smoke workflow at:
 .github/workflows/smoke.yml
 ```
 
-It installs the package with test dependencies, runs `pytest`, generates the ROSBag2 SQLite fixture, ingests the SQLite dataset, validates it, exports LeRobot and HDF5 stubs, and finishes with the end-to-end smoke script.
+It installs the package with test and `rosbags` dependencies, runs `pytest`, generates ROSBag2 SQLite/CDR/MCAP fixtures, ingests the generated datasets, validates the SQLite dataset, exports LeRobot and HDF5 stubs, and finishes with the end-to-end smoke script.
 
 ## Suggested Repository Description
 

@@ -38,6 +38,7 @@ The goal is to make embodied policy behavior easier to test, diagnose, and commu
 
 - Ingests a small benchmark-style LIBERO slice.
 - Ingests ROSBag2-style cases through reader backends for metadata fixtures and SQLite `.db3` storage.
+- Optionally ingests real CDR-serialized ROSBag2 sqlite3 and MCAP bags through the pure-Python `rosbags` backend.
 - Normalizes both sources into a shared episode schema.
 - Runs config-driven evaluations using cached or perturbed rollout adapters.
 - Produces reproducible run manifests, metrics, config snapshots, and per-episode evaluation artifacts.
@@ -126,6 +127,12 @@ For running the pytest suite as well:
 python -m pip install -e .[dev]
 ```
 
+For the optional CDR/MCAP ROSBag2 backend:
+
+```bash
+python -m pip install -e .[rosbag]
+```
+
 ### 3. Run the end-to-end demo
 
 ```bash
@@ -153,11 +160,13 @@ The demo flow exercises the full loop:
 1. `configs/datasets/libero_debug.yaml` ingests a benchmark-style sample.
 2. `configs/datasets/softrobotics_rosbag.yaml` ingests a ROSBag2-style sample through the metadata-backed reader.
 3. `configs/datasets/softrobotics_rosbag_sqlite.yaml` ingests a generated ROSBag2 SQLite fixture through the SQLite reader.
-4. `configs/eval/libero_cached_eval.yaml` runs a cached rollout baseline.
-5. `configs/eval/libero_perturbed_eval.yaml` runs a degraded rollout for comparison.
-6. `configs/eval/softrobotics_rosbag_eval.yaml` runs a replay-style ROS-compatible case.
-7. `configs/eval/failure_taxonomy_v0.yaml` provides failure tags.
-8. `configs/cases/libero_comparison_case.yaml` defines the comparison case.
+4. `configs/datasets/softrobotics_rosbag_cdr.yaml` ingests a generated CDR-serialized ROSBag2 sqlite3 fixture through the optional `rosbags` backend.
+5. `configs/datasets/softrobotics_rosbag_mcap.yaml` exercises the same backend over MCAP storage.
+6. `configs/eval/libero_cached_eval.yaml` runs a cached rollout baseline.
+7. `configs/eval/libero_perturbed_eval.yaml` runs a degraded rollout for comparison.
+8. `configs/eval/softrobotics_rosbag_eval.yaml` runs a replay-style ROS-compatible case.
+9. `configs/eval/failure_taxonomy_v0.yaml` provides failure tags.
+10. `configs/cases/libero_comparison_case.yaml` defines the comparison case.
 
 ## Shared Episode Artifacts
 
@@ -205,6 +214,9 @@ python -m pipelines.ingest --config configs/datasets/libero_debug.yaml
 python -m pipelines.ingest --config configs/datasets/softrobotics_rosbag.yaml
 python scripts/create_rosbag2_sqlite_fixture.py
 python -m pipelines.ingest --config configs/datasets/softrobotics_rosbag_sqlite.yaml
+python scripts/create_rosbag2_cdr_fixture.py
+python -m pipelines.ingest --config configs/datasets/softrobotics_rosbag_cdr.yaml
+python -m pipelines.ingest --config configs/datasets/softrobotics_rosbag_mcap.yaml
 ```
 
 ## Validation and Export
@@ -324,7 +336,7 @@ If pytest is installed:
 python -m pytest -q
 ```
 
-The GitHub Actions smoke workflow runs `pytest`, generates the ROSBag2 SQLite fixture, ingests the SQLite-backed dataset, validates it, exports both LeRobot and HDF5 contract stubs, and then runs the end-to-end smoke script.
+The GitHub Actions smoke workflow runs `pytest`, generates ROSBag2 SQLite/CDR/MCAP fixtures, ingests them, validates the SQLite dataset, exports both LeRobot and HDF5 contract stubs, and then runs the end-to-end smoke script.
 
 ## Research Positioning
 
@@ -340,7 +352,8 @@ It is intentionally scoped as a CPU-first software stack. It does not train poli
 
 ## Limitations
 
-- The SQLite ROSBag2 reader can parse standard `topics` and `messages` tables and JSON payload fixtures; full binary CDR deserialization is the next adapter target.
+- The built-in SQLite ROSBag2 reader can parse standard `topics` and `messages` tables with JSON payload fixtures.
+- The optional `rosbags` backend can deserialize CDR payloads from generated ROSBag2 sqlite3 and MCAP bags for common message families used by this project; broader custom ROS message support is future work.
 - Replay artifacts are textual and JSON-based; there is no heavy media viewer.
 - The sample datasets are small and intended for workflow demonstration.
 - Failure tags are heuristic and lightweight, not a learned root-cause model.
@@ -350,8 +363,8 @@ It is intentionally scoped as a CPU-first software stack. It does not train poli
 
 High-value next steps:
 
-- add full binary CDR message deserialization behind the existing SQLite reader interface;
-- write Parquet action and state streams for larger traces;
+- extend CDR deserialization coverage to project-specific custom ROS messages;
+- write full LeRobot and HDF5 dataset packs with media/tensor storage;
 - add an external-process policy adapter for real VLA wrappers;
 - add richer per-task metrics and failure clustering.
 

@@ -9,6 +9,7 @@ The stack now covers three source styles:
 - a benchmark-style LIBERO debug slice;
 - a ROSBag2-style metadata fixture;
 - a ROSBag2 SQLite `.db3` fixture using standard `topics` and `messages` tables.
+- optional CDR-serialized ROSBag2 sqlite3 and MCAP fixtures generated through `rosbags`.
 
 All three are mapped into the same episode artifact contract and can flow through validation, export, replay, failure analysis, and reporting.
 
@@ -26,6 +27,7 @@ From the repository root:
 
 ```bash
 python scripts/create_rosbag2_sqlite_fixture.py
+python scripts/create_rosbag2_cdr_fixture.py
 python -m pipelines.demo
 python scripts/run_smoke_checks.py
 python -m pipelines.validate_dataset --dataset outputs/datasets/softrobotics_rosbag_sqlite_v1
@@ -42,6 +44,7 @@ These commands generate:
 - Markdown and HTML reports;
 - a LeRobot-style export metadata stub;
 - an HDF5-ready packing-contract stub.
+- CDR-decoded ROSBag2 sqlite3 and MCAP normalized datasets when the optional `rosbags` dependency is installed.
 
 ## Inputs
 
@@ -88,6 +91,24 @@ data/rosbags/softrobotics_sqlite_case/rosbag2_fixture.db3
 ```
 
 The SQLite fixture uses the standard ROSBag2 `topics` and `messages` schema and stores JSON payloads so the entire workflow stays software-only and CI-friendly.
+
+### ROSBag2 CDR / MCAP Fixtures
+
+Configs:
+
+```text
+configs/datasets/softrobotics_rosbag_cdr.yaml
+configs/datasets/softrobotics_rosbag_mcap.yaml
+```
+
+Generated inputs:
+
+```text
+data/rosbags/softrobotics_cdr_case/
+data/rosbags/softrobotics_mcap_case/
+```
+
+These fixtures store real CDR-serialized ROS messages and are read through the optional pure-Python `rosbags` backend. The sqlite3 and MCAP variants exercise the same reader interface and normalize into the same episode contract.
 
 ## Unified Artifact Contract
 
@@ -180,6 +201,7 @@ This case study now demonstrates:
 - benchmark ingest;
 - ROSBag2 metadata ingest;
 - ROSBag2 SQLite storage ingest;
+- CDR-serialized ROSBag2 sqlite3 and MCAP ingest through an optional backend;
 - topic discovery and timestamp alignment;
 - quality reporting and validation;
 - learning-dataset export surfaces;
@@ -189,4 +211,4 @@ That makes the project substantially stronger than a simple benchmark wrapper or
 
 ## Current Boundaries
 
-The SQLite reader currently decodes JSON payload fixtures and preserves raw metadata for binary ROS messages. Full binary CDR deserialization and richer LeRobot/HDF5 exports are the main next steps toward a more production-like embodied data stack.
+The lightweight SQLite reader currently decodes JSON payload fixtures and preserves raw metadata for unknown binary ROS messages. The optional `rosbags` reader covers CDR-deserialized sqlite3 and MCAP fixtures for the common message families used here. Broader custom message registration plus richer LeRobot/HDF5 exports are the main next steps toward a more production-like embodied data stack.

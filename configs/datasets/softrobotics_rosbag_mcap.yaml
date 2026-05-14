@@ -1,0 +1,25 @@
+name: softrobotics_rosbag_mcap
+source_type: rosbag2
+reader: rosbags_rosbag2
+root: data/rosbags
+bag_path: softrobotics_mcap_case
+topics:
+  rgb: /camera/color/image_raw
+  state: /joint_states
+  action: /soft_robot/command
+  pressure: /soft_robot/pressure
+  instruction: /task_instruction
+  episode_marker: /episode_marker
+required_topics:
+  - rgb
+  - state
+  - action
+optional_topics:
+  - pressure
+  - instruction
+sync:
+  reference_stream: rgb
+  tolerance_ms: 50
+  step_period_ms: 125
+output_dataset_id: softrobotics_rosbag_mcap_v1
+notes: ROSBag2 MCAP fixture with CDR-serialized messages generated through the optional pure-Python rosbags backend.
