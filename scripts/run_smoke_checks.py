@@ -43,6 +43,9 @@ def main() -> None:
     snapshot = registry_snapshot()
     snapshot_path = export_registry_snapshot()
     episode_bundle = load_json("outputs/datasets/libero_debug_v1/episodes/LIBERO_EP_0001/episode.json")
+    rosbag_quality = load_json("outputs/datasets/softrobotics_rosbag_v1/quality_report.json")
+    rosbag_episode_quality = load_json("outputs/datasets/softrobotics_rosbag_v1/episodes/ROSBAG_EP_0001/quality.json")
+    rosbag_replay_summary = load_json("outputs/runs/softrobotics_rosbag_eval/replays/ROSBAG_EP_0002/summary.json")
     run_manifest = load_json("outputs/runs/libero_cached_eval/run.json")
     replay_summary = load_json("outputs/runs/libero_cached_eval/replays/LIBERO_EP_0003/summary.json")
 
@@ -61,6 +64,10 @@ def main() -> None:
     assert episode_bundle["events_ref"]["path"] == "events.jsonl"
     assert episode_bundle["plan_trace_ref"]["path"] == "plan_trace.jsonl"
     assert Path("outputs/datasets/libero_debug_v1/episodes/LIBERO_EP_0001/streams/action.json").exists()
+    assert rosbag_quality["pass_count"] == 2
+    assert rosbag_episode_quality["reference_stream"] == "rgb"
+    assert Path("outputs/datasets/softrobotics_rosbag_v1/episodes/ROSBAG_EP_0001/streams/pressure.json").exists()
+    assert rosbag_replay_summary["quality"]["status"] == "pass"
     assert run_manifest["status"] == "completed"
     assert run_manifest["config_hash"]
     assert replay_summary["event_count"] >= 1

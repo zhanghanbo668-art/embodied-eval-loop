@@ -6,6 +6,27 @@ Upgrade the current embodied evaluation stack from a metadata-backed ROS-compati
 
 The goal is not to build a full robotics runtime. The goal is to make raw or semi-raw robot traces usable for embodied policy evaluation.
 
+## Current Implementation Status
+
+Implemented in the current v1 slice:
+
+- ROSBag-style reader abstraction in `packages/adapters_rosbags/reader.py`.
+- Metadata-backed reader for CI-friendly ROSBag2-style fixtures.
+- Topic discovery for configured ROS aliases such as `rgb`, `state`, `action`, `pressure`, and `instruction`.
+- Timestamped message iteration per topic and episode.
+- Nearest-neighbor timestamp alignment with configurable tolerance.
+- Per-episode `quality.json` files.
+- Dataset-level `quality_report.json`.
+- Aligned ROS stream artifacts under each episode folder.
+- Replay summaries that include ingest quality evidence.
+- Run reports that show ingest quality status for ranked failures.
+
+Still future work:
+
+- Binary rosbag2 / MCAP backend.
+- Broader ROS message type decoding.
+- Parquet or LeRobot-style export.
+
 ## One-Line Version
 
 Build a ROSBag2-to-learning-dataset converter that parses robot log topics, aligns multimodal streams, materializes shared episode artifacts, runs quality checks, and connects the resulting dataset to replay, failure analysis, and comparison reports.

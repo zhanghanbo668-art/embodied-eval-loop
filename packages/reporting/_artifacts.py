@@ -82,9 +82,13 @@ def enrich_failure(
     enriched = dict(episode)
     replay = replay_lookup.get(format_value(episode.get("episode_id"), default=""), {})
     run_artifacts = episode.get("run_artifacts", {}) if isinstance(episode.get("run_artifacts"), dict) else {}
+    metadata = episode.get("metadata", {}) if isinstance(episode.get("metadata"), dict) else {}
+    quality = metadata.get("quality", {}) if isinstance(metadata.get("quality"), dict) else {}
     enriched["failure_tags_display"] = format_tags(episode.get("predicted_failure_tags"))
     enriched["instruction_display"] = format_value(episode.get("instruction"))
     enriched["status_display"] = format_value(episode.get("status"))
+    enriched["quality_status_display"] = format_value(quality.get("status"))
+    enriched["quality_issue_count_display"] = format_value(quality.get("issue_count"), default="0")
     enriched["replay_summary_md"] = replay.get("summary_md", "n/a")
     enriched["replay_summary_json"] = replay.get("summary_json", "n/a")
     enriched["replay_summary_md_href"] = replay.get("summary_md_href", "")

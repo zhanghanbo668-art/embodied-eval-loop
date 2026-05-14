@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from packages.adapters_rosbags import RosbagReader, TimestampedMessage, load_rosbag_reader
 from packages.common.config import display_path, resolve_repo_path
 from packages.common.io import dump_json, dump_jsonl, ensure_dir, load_json, load_yaml
 from packages.registry.service import register_dataset
@@ -241,79 +242,218 @@ def _normalize_libero(config: dict[str, Any]) -> list[EpisodeRecord]:
     return episodes
 
 
-def _normalize_rosbag(config: dict[str, Any]) -> list[EpisodeRecord]:
+def _normalize_rosbag(config: dict[str, Any], reader: RosbagReader | None = None) -> list[EpisodeRecord]:
     source_root = _source_root_from_config(config)
-    metadata_file = source_root / "metadata.json"
-    if not metadata_file.exists():
-        raise FileNotFoundError(f"Expected rosbag metadata file at {metadata_file}")
-    payload = load_json(metadata_file)
-    if not isinstance(payload, dict):
-        raise ValueError(f"Expected mapping in rosbag metadata: {metadata_file}")
-    raw_episodes = payload.get("episodes", [])
-    if not isinstance(raw_episodes, list):
-        raise ValueError(f"Expected 'episodes' list in rosbag metadata: {metadata_file}")
-
+    reader = reader or load_rosbag_reader(source_root, config)
     dataset_id = str(config["output_dataset_id"])
-    topics = config.get("topics", {})
-    observation_streams = [name for name in topics.keys() if name not in {"action", "instruction", "state"}]
+    topics = {info.alias: info for info in reader.topics()}
+    observation_streams = [
+        alias for alias in topics.keys() if alias not in {"action", "instruction", "state", "episode_marker"}
+    ]
 
     episodes: list[EpisodeRecord] = []
-    for raw_index, raw in enumerate(raw_episodes):
-        if not isinstance(raw, dict):
-            continue
-        episode_id = str(raw.get("episode_id", f"{dataset_id}_{len(episodes):04d}"))
-        start_time_ms, end_time_ms = _episode_window_ms(raw_index, int(raw.get("num_steps", 0)), "rosbag2")
+    for source_episode in reader.episodes():
         refs = [
-            ArtifactRef(kind="ros_topic", path=f"streams/{topic_name}.json", description=str(topics.get(topic_name)))
+            ArtifactRef(
+                kind="ros_topic",
+                path=f"streams/{topic_name}.json",
+                description=topics[topic_name].name,
+            )
             for topic_name in observation_streams
         ]
         episodes.append(
             EpisodeRecord(
-                episode_id=episode_id,
+                episode_id=source_episode.episode_id,
                 dataset_id=dataset_id,
-                task_id=str(raw.get("task", "unknown_task")),
-                instruction=str(raw.get("instruction", "")),
+                task_id=source_episode.task_id,
+                instruction=source_episode.instruction,
                 source_type="rosbag2",
-                source_uri=str(metadata_file),
-                num_steps=int(raw.get("num_steps", 0)),
-                start_time_ms=start_time_ms,
-                end_time_ms=end_time_ms,
+                source_uri=str(source_root),
+                num_steps=source_episode.num_steps,
+                start_time_ms=source_episode.start_time_ms,
+                end_time_ms=source_episode.end_time_ms,
                 observation_refs=refs,
                 action_ref=ArtifactRef(
                     kind="ros_topic",
                     path="streams/action.json",
-                    description=str(topics.get("action", "/unknown/action")),
+                    description=topics.get("action").name if topics.get("action") else "/unknown/action",
                 ),
                 state_ref=ArtifactRef(
                     kind="ros_topic",
                     path="streams/state.json",
-                    description=str(topics.get("state", "/unknown/state")),
+                    description=topics.get("state").name if topics.get("state") else "/unknown/state",
                 ),
                 events_ref=ArtifactRef(kind="event_timeline", path="events.jsonl"),
                 plan_trace_ref=ArtifactRef(kind="plan_trace", path="plan_trace.jsonl"),
                 metadata={
-                    "reference_success": bool(raw.get("reference_success", True)),
-                    "reference_completion_ratio": float(raw.get("reference_completion_ratio", 1.0)),
-                    "reference_action_latency_ms": int(raw.get("reference_action_latency_ms", 0)),
-                    "bag_name": payload.get("bag_name"),
+                    **source_episode.metadata,
                     "sync": config.get("sync", {}),
-                    "source_episode_index": raw_index,
-                    "normalization_source": "metadata_scaffold",
+                    "normalization_source": "rosbag_reader",
+                    "reader": config.get("reader", "metadata"),
+                    "topics": {
+                        alias: {
+                            "name": info.name,
+                            "message_type": info.message_type,
+                            "required": info.required,
+                        }
+                        for alias, info in topics.items()
+                    },
                 },
             )
         )
     return episodes
 
 
-def _materialize_episode_artifacts(output_root: Path, episodes: list[EpisodeRecord]) -> None:
+def _nearest_message(
+    reference_timestamp_ms: int,
+    messages: list[TimestampedMessage],
+    tolerance_ms: int,
+) -> tuple[TimestampedMessage | None, int | None]:
+    if not messages:
+        return None, None
+    nearest = min(messages, key=lambda message: abs(message.timestamp_ms - reference_timestamp_ms))
+    delta_ms = abs(nearest.timestamp_ms - reference_timestamp_ms)
+    if delta_ms > tolerance_ms:
+        return None, delta_ms
+    return nearest, delta_ms
+
+
+def _aligned_ros_streams(
+    episode: EpisodeRecord,
+    reader: RosbagReader,
+    config: dict[str, Any],
+) -> tuple[dict[str, list[dict[str, Any]]], dict[str, Any]]:
+    sync_config = config.get("sync", {})
+    tolerance_ms = int(sync_config.get("tolerance_ms", 50))
+    reference_alias = str(sync_config.get("reference_stream", "state"))
+    topics = {info.alias: info for info in reader.topics()}
+    required_aliases = {str(alias) for alias in config.get("required_topics", ["state", "action"])}
+    stream_messages = {
+        alias: list(reader.messages(alias, episode.episode_id))
+        for alias in topics.keys()
+        if alias != "episode_marker"
+    }
+    reference_messages = stream_messages.get(reference_alias) or stream_messages.get("state") or []
+
+    issues: list[dict[str, Any]] = []
+    for alias in required_aliases:
+        if alias not in topics:
+            issues.append({"severity": "error", "type": "missing_required_topic", "topic": alias})
+        elif not stream_messages.get(alias):
+            issues.append({"severity": "error", "type": "empty_required_topic", "topic": alias})
+
+    aligned: dict[str, list[dict[str, Any]]] = {alias: [] for alias in stream_messages.keys()}
+    if not reference_messages:
+        issues.append({"severity": "error", "type": "missing_reference_stream", "topic": reference_alias})
+        return aligned, _quality_payload(episode, stream_messages, issues, tolerance_ms, reference_alias)
+
+    for step, reference in enumerate(reference_messages):
+        for alias, messages in stream_messages.items():
+            match, delta_ms = _nearest_message(reference.timestamp_ms, messages, tolerance_ms)
+            if match is None:
+                issues.append(
+                    {
+                        "severity": "warning",
+                        "type": "stale_or_missing_sample",
+                        "topic": alias,
+                        "step": step,
+                        "reference_timestamp_ms": reference.timestamp_ms,
+                        "nearest_delta_ms": delta_ms,
+                    }
+                )
+                continue
+            row = {
+                "step": step,
+                "timestamp_ms": match.timestamp_ms,
+                "aligned_to_ms": reference.timestamp_ms,
+                "delta_ms": delta_ms,
+                "topic": alias,
+                **match.payload,
+            }
+            aligned[alias].append(row)
+
+    return aligned, _quality_payload(episode, stream_messages, issues, tolerance_ms, reference_alias, aligned)
+
+
+def _quality_payload(
+    episode: EpisodeRecord,
+    stream_messages: dict[str, list[TimestampedMessage]],
+    issues: list[dict[str, Any]],
+    tolerance_ms: int,
+    reference_alias: str,
+    aligned: dict[str, list[dict[str, Any]]] | None = None,
+) -> dict[str, Any]:
+    aligned = aligned or {}
+    stream_counts = {alias: len(messages) for alias, messages in stream_messages.items()}
+    aligned_counts = {alias: len(rows) for alias, rows in aligned.items()}
+    max_gap_ms = 0
+    for messages in stream_messages.values():
+        ordered = sorted(messages, key=lambda message: message.timestamp_ms)
+        gaps = [
+            ordered[index + 1].timestamp_ms - ordered[index].timestamp_ms
+            for index in range(len(ordered) - 1)
+        ]
+        if gaps:
+            max_gap_ms = max(max_gap_ms, max(gaps))
+    status = "pass" if not any(issue["severity"] == "error" for issue in issues) else "fail"
+    return {
+        "episode_id": episode.episode_id,
+        "status": status,
+        "reference_stream": reference_alias,
+        "tolerance_ms": tolerance_ms,
+        "stream_counts": stream_counts,
+        "aligned_counts": aligned_counts,
+        "max_gap_ms": max_gap_ms,
+        "issues": issues,
+    }
+
+
+def _build_ros_event_timeline(
+    episode: EpisodeRecord,
+    action_trace: list[dict[str, Any]],
+    state_trace: list[dict[str, Any]],
+    quality: dict[str, Any],
+) -> list[dict[str, Any]]:
+    events = _build_event_timeline(episode, action_trace, state_trace)
+    for issue in quality.get("issues", []):
+        if not isinstance(issue, dict):
+            continue
+        events.append(
+            {
+                "timestamp_ms": issue.get("reference_timestamp_ms", episode.start_time_ms),
+                "type": "quality_issue",
+                "severity": issue.get("severity"),
+                "issue_type": issue.get("type"),
+                "topic": issue.get("topic"),
+                "step": issue.get("step"),
+            }
+        )
+    return sorted(events, key=lambda event: int(event.get("timestamp_ms", episode.start_time_ms)))
+
+
+def _materialize_episode_artifacts(
+    output_root: Path,
+    episodes: list[EpisodeRecord],
+    config: dict[str, Any] | None = None,
+    rosbag_reader: RosbagReader | None = None,
+) -> dict[str, Any] | None:
+    dataset_quality: list[dict[str, Any]] = []
     for episode in episodes:
         episode_dir = _build_episode_dir(output_root, episode.episode_id)
         streams_dir = ensure_dir(episode_dir / "streams")
         episode.artifact_root = display_path(episode_dir)
 
-        action_trace = _build_action_trace(episode)
-        state_trace = _build_state_trace(episode)
-        event_timeline = _build_event_timeline(episode, action_trace, state_trace)
+        quality: dict[str, Any] | None = None
+        aligned_streams: dict[str, list[dict[str, Any]]] = {}
+        if episode.source_type == "rosbag2" and rosbag_reader is not None and config is not None:
+            aligned_streams, quality = _aligned_ros_streams(episode, rosbag_reader, config)
+            action_trace = _rows_to_action_trace(episode, aligned_streams.get("action", []))
+            state_trace = _rows_to_state_trace(episode, aligned_streams.get("state", []))
+            event_timeline = _build_ros_event_timeline(episode, action_trace, state_trace, quality)
+        else:
+            action_trace = _build_action_trace(episode)
+            state_trace = _build_state_trace(episode)
+            event_timeline = _build_event_timeline(episode, action_trace, state_trace)
         plan_trace = _build_plan_trace(episode)
 
         if episode.action_ref:
@@ -321,12 +461,23 @@ def _materialize_episode_artifacts(output_root: Path, episodes: list[EpisodeReco
         if episode.state_ref:
             dump_json(streams_dir / Path(episode.state_ref.path).name, state_trace)
         for ref in episode.observation_refs:
-            observation_trace = _build_observation_trace(ref.description or ref.kind, episode)
+            stream_name = Path(ref.path).stem
+            observation_trace = aligned_streams.get(stream_name) or _build_observation_trace(
+                ref.description or ref.kind, episode
+            )
             dump_json(streams_dir / Path(ref.path).name, observation_trace)
         if episode.events_ref:
             dump_jsonl(episode_dir / episode.events_ref.path, event_timeline)
         if episode.plan_trace_ref:
             dump_jsonl(episode_dir / episode.plan_trace_ref.path, plan_trace)
+        if quality:
+            dump_json(episode_dir / "quality.json", quality)
+            dataset_quality.append(quality)
+            episode.metadata["quality"] = {
+                "status": quality["status"],
+                "issue_count": len(quality.get("issues", [])),
+                "quality_ref": "quality.json",
+            }
 
         dump_json(episode_dir / "episode.json", episode.model_dump(mode="json"))
         dump_json(
@@ -340,9 +491,61 @@ def _materialize_episode_artifacts(output_root: Path, episodes: list[EpisodeReco
                 "artifact_root": episode.artifact_root,
                 "events_ref": episode.events_ref.path if episode.events_ref else None,
                 "plan_trace_ref": episode.plan_trace_ref.path if episode.plan_trace_ref else None,
+                "quality_ref": "quality.json" if quality else None,
                 "replay_command": f"python -m pipelines.replay --run <RUN_ROOT> --top-k 1",
             },
         )
+    if dataset_quality:
+        summary = {
+            "episode_count": len(dataset_quality),
+            "pass_count": sum(1 for item in dataset_quality if item.get("status") == "pass"),
+            "fail_count": sum(1 for item in dataset_quality if item.get("status") == "fail"),
+            "issue_count": sum(len(item.get("issues", [])) for item in dataset_quality),
+            "episodes": dataset_quality,
+        }
+        dump_json(output_root / "quality_report.json", summary)
+        return summary
+    return None
+
+
+def _rows_to_action_trace(episode: EpisodeRecord, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if not rows:
+        return _build_action_trace(episode)
+    trace: list[dict[str, Any]] = []
+    for row in rows:
+        step = int(row.get("step", len(trace)))
+        trace.append(
+            {
+                "step": step,
+                "timestamp_ms": int(row.get("timestamp_ms", episode.start_time_ms)),
+                "phase": _phase_name(step, max(episode.num_steps, 1)),
+                "action": str(row.get("command", row.get("action", "unknown"))),
+                "target_pressure": row.get("target_pressure"),
+                "delta_ms": row.get("delta_ms"),
+            }
+        )
+    return trace
+
+
+def _rows_to_state_trace(episode: EpisodeRecord, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if not rows:
+        return _build_state_trace(episode)
+    trace: list[dict[str, Any]] = []
+    for row in rows:
+        step = int(row.get("step", len(trace)))
+        trace.append(
+            {
+                "step": step,
+                "timestamp_ms": int(row.get("timestamp_ms", episode.start_time_ms)),
+                "phase": _phase_name(step, max(episode.num_steps, 1)),
+                "progress": float(row.get("progress", 0.0)),
+                "stiffness": row.get("stiffness"),
+                "contact": row.get("contact"),
+                "delta_ms": row.get("delta_ms"),
+                "is_terminal": step == max(episode.num_steps, 1) - 1,
+            }
+        )
+    return trace
 
 
 def ingest_dataset(config_path: str | Path) -> IngestResult:
@@ -353,15 +556,22 @@ def ingest_dataset(config_path: str | Path) -> IngestResult:
     source_root = _source_root_from_config(config)
     output_root = _output_root(dataset_id)
     ensure_dir(output_root)
+    rosbag_reader: RosbagReader | None = None
 
     if source_type == "libero":
         episodes = _normalize_libero(config)
     elif source_type == "rosbag2":
-        episodes = _normalize_rosbag(config)
+        rosbag_reader = load_rosbag_reader(source_root, config)
+        episodes = _normalize_rosbag(config, rosbag_reader)
     else:
         raise ValueError(f"Unsupported source_type: {source_type}")
 
-    _materialize_episode_artifacts(output_root, episodes)
+    quality_summary = _materialize_episode_artifacts(
+        output_root,
+        episodes,
+        config=config,
+        rosbag_reader=rosbag_reader,
+    )
 
     manifest = DatasetManifest(
         dataset_id=dataset_id,
@@ -372,6 +582,7 @@ def ingest_dataset(config_path: str | Path) -> IngestResult:
         episodes=episodes,
         metadata={
             "config": config,
+            "quality_summary": quality_summary,
         },
     )
 

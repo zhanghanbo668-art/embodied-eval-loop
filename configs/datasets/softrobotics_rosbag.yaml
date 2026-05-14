@@ -1,13 +1,23 @@
 name: softrobotics_rosbag
 source_type: rosbag2
+reader: metadata
 root: data/rosbags/softrobotics_case
 topics:
   rgb: /camera/color/image_raw
   state: /soft_robot/state
   action: /soft_robot/command
+  pressure: /soft_robot/pressure
   instruction: /task_instruction
+required_topics:
+  - rgb
+  - state
+  - action
+optional_topics:
+  - pressure
+  - instruction
 sync:
   reference_stream: rgb
   tolerance_ms: 50
+  step_period_ms: 125
 output_dataset_id: softrobotics_rosbag_v1
-notes: Replay-only ROS-compatible case study; no live robot execution required.
+notes: ROSBag2-style metadata fixture for topic parsing, timestamp alignment, quality checks, and replay-only evaluation.

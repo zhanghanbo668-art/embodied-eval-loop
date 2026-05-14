@@ -49,6 +49,7 @@ REPORT_TEMPLATE = Template(
 - Completion ratio: `{{ episode.completion_ratio }}`
 - Action latency ms: `{{ episode.action_latency_ms }}`
 - Failure tags: `{{ episode.failure_tags_display }}`
+- Ingest quality: `{{ episode.quality_status_display }}` (issues: `{{ episode.quality_issue_count_display }}`)
 - Replay summary (Markdown): `{{ episode.replay_summary_md }}`
 - Replay summary (JSON): `{{ episode.replay_summary_json }}`
 - Evaluation artifact: `{{ episode.evaluation_json_display }}`
@@ -170,6 +171,7 @@ HTML_TEMPLATE = Template(
           <th>Completion</th>
           <th>Latency ms</th>
           <th>Failure tags</th>
+          <th>Quality</th>
           <th>Replay</th>
           <th>Eval artifact</th>
           <th>Instruction</th>
@@ -184,6 +186,7 @@ HTML_TEMPLATE = Template(
           <td>{{ episode.completion_ratio }}</td>
           <td>{{ episode.action_latency_ms }}</td>
           <td>{{ episode.failure_tags_display }}</td>
+          <td>{{ episode.quality_status_display }} ({{ episode.quality_issue_count_display }})</td>
           <td>
             {% if episode.replay_summary_md_href %}
             <div><a href="{{ episode.replay_summary_md_href }}">summary.md</a></div>

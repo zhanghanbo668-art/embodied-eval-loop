@@ -23,6 +23,7 @@ def _load_episode_bundle(episode: dict[str, Any]) -> dict[str, Any]:
     for key, rel_path in (
         ("episode", "episode.json"),
         ("replay_stub", "replay_stub.json"),
+        ("quality", "quality.json"),
         ("events", "events.jsonl"),
         ("plan_trace", "plan_trace.jsonl"),
     ):
@@ -110,6 +111,7 @@ def build_replay_artifacts(run_root: str | Path, top_k: int = 10) -> dict[str, A
             "action_preview": _action_preview(action_trace),
             "final_progress": state_trace[-1]["progress"] if state_trace else None,
             "plan_segments": [segment.get("label", "unknown") for segment in plan_trace if isinstance(segment, dict)],
+            "quality": bundle.get("quality") or episode.get("metadata", {}).get("quality"),
         }
         dump_json(episode_root / "summary.json", summary)
         markdown = _render_markdown(summary)
@@ -144,6 +146,7 @@ def _render_markdown(summary: dict[str, Any]) -> str:
     )
     plan_segments = ", ".join(summary.get("plan_segments", [])) or "none"
     action_preview = ", ".join(summary.get("action_preview", [])) or "none"
+    quality = summary.get("quality") if isinstance(summary.get("quality"), dict) else {}
     return "\n".join(
         [
             f"# Replay Summary: {summary['episode_id']}",
@@ -157,6 +160,8 @@ def _render_markdown(summary: dict[str, Any]) -> str:
             f"- Final progress: `{summary.get('final_progress', 'n/a')}`",
             f"- Plan segments: `{plan_segments}`",
             f"- Action preview: `{action_preview}`",
+            f"- Quality status: `{quality.get('status', 'n/a')}`",
+            f"- Quality issues: `{len(quality.get('issues', [])) if quality else 'n/a'}`",
             f"- Source episode root: `{summary.get('source_episode_artifact_root', 'n/a')}`",
             f"- Run episode root: `{summary.get('run_episode_artifact_root', 'n/a')}`",
             "",
