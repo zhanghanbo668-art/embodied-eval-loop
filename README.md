@@ -47,6 +47,7 @@ The goal is to make embodied policy behavior easier to test, diagnose, and commu
 - Ranks failed episodes and assigns lightweight failure taxonomy tags.
 - Generates replay summaries with event timelines, keyframes, action previews, and plan segments.
 - Builds Markdown and HTML reports for individual runs and baseline-vs-candidate comparisons.
+- Generates dataset cards that summarize multimodal streams, quality signals, export views, and split metadata.
 - Adds configuration-driven regression gates for baseline-vs-candidate acceptance checks.
 - Maintains a local SQLite registry and JSON snapshot for datasets, runs, and comparisons.
 
@@ -287,6 +288,12 @@ python -m pipelines.report --run outputs/runs/libero_cached_eval
 python -m pipelines.report --run outputs/runs/softrobotics_rosbag_eval
 ```
 
+### Generate dataset cards
+
+```bash
+python -m pipelines.dataset_card --dataset outputs/datasets/softrobotics_rosbag_sqlite_v1
+```
+
 ### Compare runs
 
 ```bash
@@ -340,6 +347,7 @@ It verifies:
 - cached, perturbed, and ROS-compatible evaluations run;
 - analysis and replay artifacts are generated;
 - deterministic train/eval split export manifests are generated;
+- dataset cards are generated from normalized multimodal datasets;
 - regression gates can both pass and fail in reproducible ways;
 - reports and comparison reports exist;
 - registry snapshot is populated;
@@ -360,6 +368,7 @@ This project is best understood as research infrastructure for embodied policy e
 - artifact design for heterogeneous embodied data;
 - reproducible evaluation workflows;
 - acceptance-style regression checks over benchmark and replay runs;
+- dataset-facing documentation and multimodal quality summaries for release-oriented workflows;
 - adapter-based integration over one-off scripts;
 - failure observability beyond scalar metrics;
 - a bridge between benchmark-side VLA work and ROS-compatible execution traces.

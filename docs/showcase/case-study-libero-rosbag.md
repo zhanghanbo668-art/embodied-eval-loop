@@ -46,6 +46,7 @@ These commands generate:
 - a LeRobot-style export metadata stub;
 - an HDF5-ready packing-contract stub.
 - a deterministic train/eval split manifest for release-oriented learning-dataset handoff;
+- a dataset card that summarizes topics, quality, export surfaces, and reproducibility metadata;
 - CDR-decoded ROSBag2 sqlite3 and MCAP normalized datasets when the optional `rosbags` dependency is installed.
 
 ## Inputs

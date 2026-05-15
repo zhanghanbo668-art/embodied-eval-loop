@@ -36,6 +36,8 @@ In practice, that means I can take a benchmark slice and a ROS-compatible log so
 
 The value is in the outputs, not just the code. A run produces reproducible artifacts: manifests, metrics, per-episode records, replayable traces, failure tags, and reports. That gives you something a lab or research team can actually reuse when they need to debug regressions, compare policy variants, or explain results in a paper or meeting.
 
+On the data side, the stack now also emits dataset cards and split manifests, which makes multimodal ROS-compatible traces easier to hand off, inspect, and reuse in later learning workflows.
+
 ### 6. Clarify what it is not
 
 This is deliberately not a new model contribution, not a training stack, and not a hardware demo. I treated it as research infrastructure: the layer that makes embodied policy work more testable, diagnosable, and easier to present.

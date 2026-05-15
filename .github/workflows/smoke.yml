@@ -60,5 +60,8 @@ jobs:
       - name: Evaluate passing regression gate
         run: python -m pipelines.gate --config configs/cases/libero_regression_gate_pass.yaml
 
+      - name: Generate dataset card
+        run: python -m pipelines.dataset_card --dataset outputs/datasets/softrobotics_rosbag_sqlite_v1
+
       - name: Run smoke checks
         run: python scripts/run_smoke_checks.py

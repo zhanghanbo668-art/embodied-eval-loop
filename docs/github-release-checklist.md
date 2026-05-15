@@ -30,6 +30,7 @@ python -m pipelines.validate_dataset --dataset outputs/datasets/softrobotics_ros
 python -m pipelines.export_dataset --dataset outputs/datasets/softrobotics_rosbag_sqlite_v1 --format lerobot_stub
 python -m pipelines.export_dataset --dataset outputs/datasets/softrobotics_rosbag_sqlite_v1 --format hdf5_stub
 python -m pipelines.export_dataset --dataset outputs/datasets/softrobotics_rosbag_sqlite_v1 --format split_jsonl --split-ratio 0.5 --split-seed 2
+python -m pipelines.dataset_card --dataset outputs/datasets/softrobotics_rosbag_sqlite_v1
 python -m pipelines.gate --config configs/cases/libero_regression_gate_pass.yaml
 ```
 

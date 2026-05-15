@@ -17,6 +17,7 @@ from packages.ingest.service import ingest_dataset
 from packages.replay.service import build_replay_artifacts
 from packages.registry.service import export_registry_snapshot, registry_snapshot
 from packages.reporting.comparison import build_comparison_report
+from packages.reporting.dataset_card import build_dataset_card
 from packages.reporting.gate import run_regression_gate
 from packages.reporting.service import build_report
 from packages.validation import validate_dataset
@@ -61,6 +62,7 @@ def main() -> None:
     report = build_report("outputs/runs/libero_cached_eval")
     rosbag_report = build_report("outputs/runs/softrobotics_rosbag_eval")
     comparison_report = build_comparison_report("configs/cases/libero_comparison_case.yaml")
+    dataset_card = build_dataset_card("outputs/datasets/softrobotics_rosbag_sqlite_v1")
     pass_gate = run_regression_gate("configs/cases/libero_regression_gate_pass.yaml")
     fail_gate = run_regression_gate("configs/cases/libero_regression_gate_fail.yaml")
     comparison = compare_runs("outputs/runs/libero_cached_eval", "outputs/runs/libero_perturbed_eval")
@@ -85,6 +87,8 @@ def main() -> None:
     assert Path(report).exists()
     assert Path(rosbag_report).exists()
     assert Path(comparison_report).exists()
+    assert Path(dataset_card.markdown_path).exists()
+    assert Path(dataset_card.json_path).exists()
     assert pass_gate.status == "pass"
     assert fail_gate.status == "fail"
     assert Path(pass_gate.report_path).exists()
