@@ -30,6 +30,7 @@ Implemented in the current v1 slice:
 - HDF5-compatible packing-contract stub export.
 - Deterministic `split_jsonl` export with reproducible train/eval assignment from `dataset_id`, `episode_id`, and split seed.
 - Parquet-if-available action/state export with JSONL fallback.
+- Configuration-driven regression gates for baseline-vs-candidate acceptance checks.
 - GitHub Actions smoke workflow that installs the package, runs `pytest`, generates ROSBag2 SQLite/CDR/MCAP fixtures, ingests them, validates outputs, exports dataset views, and runs smoke checks.
 
 Still future work:

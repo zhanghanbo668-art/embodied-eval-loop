@@ -47,6 +47,7 @@ The goal is to make embodied policy behavior easier to test, diagnose, and commu
 - Ranks failed episodes and assigns lightweight failure taxonomy tags.
 - Generates replay summaries with event timelines, keyframes, action previews, and plan segments.
 - Builds Markdown and HTML reports for individual runs and baseline-vs-candidate comparisons.
+- Adds configuration-driven regression gates for baseline-vs-candidate acceptance checks.
 - Maintains a local SQLite registry and JSON snapshot for datasets, runs, and comparisons.
 
 ## Tech Stack
@@ -292,6 +293,12 @@ python -m pipelines.report --run outputs/runs/softrobotics_rosbag_eval
 python -m pipelines.compare --config configs/cases/libero_comparison_case.yaml
 ```
 
+### Evaluate regression gates
+
+```bash
+python -m pipelines.gate --config configs/cases/libero_regression_gate_pass.yaml
+```
+
 ### Inspect the local registry
 
 ```bash
@@ -333,6 +340,7 @@ It verifies:
 - cached, perturbed, and ROS-compatible evaluations run;
 - analysis and replay artifacts are generated;
 - deterministic train/eval split export manifests are generated;
+- regression gates can both pass and fail in reproducible ways;
 - reports and comparison reports exist;
 - registry snapshot is populated;
 - richer episode artifacts include event timelines, plan traces, action streams, run config hashes, and replay summaries.
@@ -343,7 +351,7 @@ If pytest is installed:
 python -m pytest -q
 ```
 
-The GitHub Actions smoke workflow runs `pytest`, generates ROSBag2 SQLite/CDR/MCAP fixtures, ingests them, validates the SQLite dataset, exports LeRobot and HDF5 contract stubs, exercises deterministic split export, and then runs the end-to-end smoke script.
+The GitHub Actions smoke workflow runs `pytest`, generates ROSBag2 SQLite/CDR/MCAP fixtures, ingests them, validates the SQLite dataset, exports LeRobot and HDF5 contract stubs, exercises deterministic split export, verifies regression gates, and then runs the end-to-end smoke script.
 
 ## Research Positioning
 
@@ -351,6 +359,7 @@ This project is best understood as research infrastructure for embodied policy e
 
 - artifact design for heterogeneous embodied data;
 - reproducible evaluation workflows;
+- acceptance-style regression checks over benchmark and replay runs;
 - adapter-based integration over one-off scripts;
 - failure observability beyond scalar metrics;
 - a bridge between benchmark-side VLA work and ROS-compatible execution traces.

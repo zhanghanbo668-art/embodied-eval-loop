@@ -28,6 +28,8 @@ The end-to-end workflow is:
 
 `data ingest -> schema normalization -> eval or replay -> failure analysis -> comparison report`
 
+In the current version, that loop also supports regression gates, so a benchmark comparison can become a reproducible pass/fail acceptance check rather than only a descriptive report.
+
 In practice, that means I can take a benchmark slice and a ROS-compatible log source, convert both into the same artifact layout, run a config-driven evaluation path, inspect where failures cluster, and generate a report that shows both aggregate metrics and representative episodes.
 
 ### 5. Show what makes it useful

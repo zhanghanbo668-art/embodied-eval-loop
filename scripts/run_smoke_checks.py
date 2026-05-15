@@ -17,6 +17,7 @@ from packages.ingest.service import ingest_dataset
 from packages.replay.service import build_replay_artifacts
 from packages.registry.service import export_registry_snapshot, registry_snapshot
 from packages.reporting.comparison import build_comparison_report
+from packages.reporting.gate import run_regression_gate
 from packages.reporting.service import build_report
 from packages.validation import validate_dataset
 from scripts.create_rosbag2_cdr_fixture import main as create_rosbag2_cdr_fixture
@@ -60,6 +61,8 @@ def main() -> None:
     report = build_report("outputs/runs/libero_cached_eval")
     rosbag_report = build_report("outputs/runs/softrobotics_rosbag_eval")
     comparison_report = build_comparison_report("configs/cases/libero_comparison_case.yaml")
+    pass_gate = run_regression_gate("configs/cases/libero_regression_gate_pass.yaml")
+    fail_gate = run_regression_gate("configs/cases/libero_regression_gate_fail.yaml")
     comparison = compare_runs("outputs/runs/libero_cached_eval", "outputs/runs/libero_perturbed_eval")
     snapshot = registry_snapshot()
     snapshot_path = export_registry_snapshot()
@@ -82,6 +85,10 @@ def main() -> None:
     assert Path(report).exists()
     assert Path(rosbag_report).exists()
     assert Path(comparison_report).exists()
+    assert pass_gate.status == "pass"
+    assert fail_gate.status == "fail"
+    assert Path(pass_gate.report_path).exists()
+    assert Path(fail_gate.json_path).exists()
     assert Path(snapshot_path).exists()
     assert snapshot["datasets"]
     assert snapshot["runs"]

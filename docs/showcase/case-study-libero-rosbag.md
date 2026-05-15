@@ -208,6 +208,7 @@ This case study now demonstrates:
 - quality reporting and validation;
 - learning-dataset export surfaces;
 - reproducible train/eval split export for downstream learning workflows;
+- regression-gate artifacts that convert benchmark comparison into a pass/fail acceptance check;
 - failure replay and comparison reporting.
 
 That makes the project substantially stronger than a simple benchmark wrapper or replay demo.

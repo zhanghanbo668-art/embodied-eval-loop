@@ -259,7 +259,7 @@ HTML_TEMPLATE = Template(
 )
 
 
-def _aggregate_by_task(episodes: list[dict[str, Any]]) -> dict[str, dict[str, float]]:
+def aggregate_task_metrics(episodes: list[dict[str, Any]]) -> dict[str, dict[str, float]]:
     by_task: dict[str, list[dict[str, Any]]] = {}
     for episode in episodes:
         task_id = str(episode.get("task_id", "unknown_task"))
@@ -279,9 +279,9 @@ def _aggregate_by_task(episodes: list[dict[str, Any]]) -> dict[str, dict[str, fl
     return summary
 
 
-def _task_regressions(baseline: list[dict[str, Any]], candidate: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    base_summary = _aggregate_by_task(baseline)
-    cand_summary = _aggregate_by_task(candidate)
+def task_regressions(baseline: list[dict[str, Any]], candidate: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    base_summary = aggregate_task_metrics(baseline)
+    cand_summary = aggregate_task_metrics(candidate)
     task_ids = sorted(set(base_summary) | set(cand_summary))
     rows: list[dict[str, Any]] = []
     for task_id in task_ids:
@@ -369,7 +369,7 @@ def build_comparison_report(case_config_path: str | Path) -> Path:
         None,
     )
 
-    task_rows = _filter_focus_tasks(_task_regressions(baseline_episodes, candidate_episodes), focus_tasks)
+    task_rows = _filter_focus_tasks(task_regressions(baseline_episodes, candidate_episodes), focus_tasks)
     failure_breakdown = candidate_analysis.get("by_tag", {})
     baseline_display = display_path(baseline_run)
     candidate_display = display_path(candidate_run)

@@ -51,6 +51,11 @@ def main() -> None:
     except ImportError as exc:
         raise RuntimeError("Install optional rosbags support with: python -m pip install -e .[rosbag]") from exc
 
+    if _fixture_ready(SQLITE_BAG_PATH) and _fixture_ready(MCAP_BAG_PATH):
+        print(SQLITE_BAG_PATH)
+        print(MCAP_BAG_PATH)
+        return
+
     typestore = get_typestore(Stores.LATEST)
     _write_bag(SQLITE_BAG_PATH, StoragePlugin.SQLITE3, Writer, typestore)
     _write_bag(MCAP_BAG_PATH, StoragePlugin.MCAP, Writer, typestore)
@@ -74,6 +79,18 @@ def _write_bag(path: Path, storage_plugin: object, writer_cls: object, typestore
         }
         for episode in EPISODES:
             _write_episode(writer, connections, typestore, episode)
+
+
+def _fixture_ready(path: Path) -> bool:
+    if not path.exists():
+        return False
+    metadata = path / "metadata.yaml"
+    if not metadata.exists():
+        return False
+    for child in path.iterdir():
+        if child.is_file() and child.name != "metadata.yaml":
+            return True
+    return False
 
 
 def _write_episode(writer: object, connections: dict[str, object], typestore: object, episode: dict[str, object]) -> None:

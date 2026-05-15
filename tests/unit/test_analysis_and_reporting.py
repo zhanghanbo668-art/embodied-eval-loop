@@ -9,6 +9,7 @@ from packages.ingest.service import ingest_dataset
 from packages.eval_runner.service import run_evaluation
 from packages.replay.service import build_replay_artifacts
 from packages.reporting.comparison import build_comparison_report
+from packages.reporting.gate import run_regression_gate
 from packages.reporting.service import build_report
 
 
@@ -21,9 +22,17 @@ def test_analysis_replay_and_reports() -> None:
     replay = build_replay_artifacts("outputs/runs/libero_cached_eval", top_k=2)
     report_path = build_report("outputs/runs/libero_cached_eval")
     comparison_path = build_comparison_report("configs/cases/libero_comparison_case.yaml")
+    pass_gate = run_regression_gate("configs/cases/libero_regression_gate_pass.yaml")
+    fail_gate = run_regression_gate("configs/cases/libero_regression_gate_fail.yaml")
 
     assert analysis.failure_count >= 1
     assert Path(analysis.failure_tags_path).exists()
     assert replay["replay_count"] >= 1
     assert report_path.exists()
     assert comparison_path.exists()
+    assert pass_gate.status == "pass"
+    assert pass_gate.failed_count == 0
+    assert pass_gate.report_path.exists()
+    assert fail_gate.status == "fail"
+    assert fail_gate.failed_count >= 1
+    assert fail_gate.json_path.exists()

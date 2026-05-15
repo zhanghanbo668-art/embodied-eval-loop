@@ -1,0 +1,15 @@
+name: libero_regression_gate_fail
+type: regression_gate
+baseline_run: outputs/runs/libero_cached_eval
+candidate_run: outputs/runs/libero_perturbed_eval
+aggregate_gates:
+  - metric: success_rate
+    min_delta: -0.1
+  - metric: completion_ratio
+    min_delta: -0.15
+  - metric: action_latency_ms
+    max_delta: 40
+task_gates:
+  - task_id: drawer_open
+    metric: completion_ratio
+    min_delta: -0.2
