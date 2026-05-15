@@ -245,6 +245,12 @@ Export an HDF5-compatible packing contract stub:
 python -m pipelines.export_dataset --dataset outputs/datasets/softrobotics_rosbag_sqlite_v1 --format hdf5_stub
 ```
 
+Export a deterministic train/eval split view for downstream learning workflows:
+
+```bash
+python -m pipelines.export_dataset --dataset outputs/datasets/softrobotics_rosbag_sqlite_v1 --format split_jsonl --split-ratio 0.5 --split-seed 2
+```
+
 Export tabular action/state streams as JSONL plus Parquet when a Parquet engine is available:
 
 ```bash
@@ -326,6 +332,7 @@ It verifies:
 - both sample datasets ingest successfully;
 - cached, perturbed, and ROS-compatible evaluations run;
 - analysis and replay artifacts are generated;
+- deterministic train/eval split export manifests are generated;
 - reports and comparison reports exist;
 - registry snapshot is populated;
 - richer episode artifacts include event timelines, plan traces, action streams, run config hashes, and replay summaries.
@@ -336,7 +343,7 @@ If pytest is installed:
 python -m pytest -q
 ```
 
-The GitHub Actions smoke workflow runs `pytest`, generates ROSBag2 SQLite/CDR/MCAP fixtures, ingests them, validates the SQLite dataset, exports both LeRobot and HDF5 contract stubs, and then runs the end-to-end smoke script.
+The GitHub Actions smoke workflow runs `pytest`, generates ROSBag2 SQLite/CDR/MCAP fixtures, ingests them, validates the SQLite dataset, exports LeRobot and HDF5 contract stubs, exercises deterministic split export, and then runs the end-to-end smoke script.
 
 ## Research Positioning
 
@@ -364,6 +371,7 @@ It is intentionally scoped as a CPU-first software stack. It does not train poli
 High-value next steps:
 
 - extend CDR deserialization coverage to project-specific custom ROS messages;
+- add split-aware Parquet and richer release-oriented dataset exports;
 - write full LeRobot and HDF5 dataset packs with media/tensor storage;
 - add an external-process policy adapter for real VLA wrappers;
 - add richer per-task metrics and failure clustering.

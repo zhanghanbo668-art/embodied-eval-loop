@@ -29,6 +29,7 @@ python scripts/run_smoke_checks.py
 python -m pipelines.validate_dataset --dataset outputs/datasets/softrobotics_rosbag_sqlite_v1
 python -m pipelines.export_dataset --dataset outputs/datasets/softrobotics_rosbag_sqlite_v1 --format lerobot_stub
 python -m pipelines.export_dataset --dataset outputs/datasets/softrobotics_rosbag_sqlite_v1 --format hdf5_stub
+python -m pipelines.export_dataset --dataset outputs/datasets/softrobotics_rosbag_sqlite_v1 --format split_jsonl --split-ratio 0.5 --split-seed 2
 ```
 
 ## GitHub Setup
@@ -52,7 +53,11 @@ This repository already includes an enabled smoke workflow at:
 .github/workflows/smoke.yml
 ```
 
-It installs the package with test and `rosbags` dependencies, runs `pytest`, generates ROSBag2 SQLite/CDR/MCAP fixtures, ingests the generated datasets, validates the SQLite dataset, exports LeRobot and HDF5 stubs, and finishes with the end-to-end smoke script.
+It installs the package with test and `rosbags` dependencies, runs `pytest`, generates ROSBag2 SQLite/CDR/MCAP fixtures, ingests the generated datasets, validates the SQLite dataset, exports LeRobot/HDF5/split dataset views, and finishes with the end-to-end smoke script.
+
+## Reproducibility Note
+
+For split exports, always record both `--split-ratio` and `--split-seed` in any experiment note, paper appendix, or release artifact. The current implementation uses a stable hash over `dataset_id + episode_id + seed`, so the same dataset and seed will reproduce the same assignment across machines.
 
 ## Suggested Repository Description
 

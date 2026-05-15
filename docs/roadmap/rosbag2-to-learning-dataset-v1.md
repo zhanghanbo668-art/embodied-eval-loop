@@ -28,12 +28,14 @@ Implemented in the current v1 slice:
 - Learning-dataset export CLI in `pipelines.export_dataset`.
 - LeRobot-style metadata stub export.
 - HDF5-compatible packing-contract stub export.
+- Deterministic `split_jsonl` export with reproducible train/eval assignment from `dataset_id`, `episode_id`, and split seed.
 - Parquet-if-available action/state export with JSONL fallback.
 - GitHub Actions smoke workflow that installs the package, runs `pytest`, generates ROSBag2 SQLite/CDR/MCAP fixtures, ingests them, validates outputs, exports dataset views, and runs smoke checks.
 
 Still future work:
 
 - Broader custom ROS message decoding beyond the common message families used in fixtures.
+- Split-aware Parquet and richer release-facing dataset export targets.
 - Full LeRobot dataset writer with media tensors.
 
 ## One-Line Version

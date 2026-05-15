@@ -33,6 +33,7 @@ python scripts/run_smoke_checks.py
 python -m pipelines.validate_dataset --dataset outputs/datasets/softrobotics_rosbag_sqlite_v1
 python -m pipelines.export_dataset --dataset outputs/datasets/softrobotics_rosbag_sqlite_v1 --format lerobot_stub
 python -m pipelines.export_dataset --dataset outputs/datasets/softrobotics_rosbag_sqlite_v1 --format hdf5_stub
+python -m pipelines.export_dataset --dataset outputs/datasets/softrobotics_rosbag_sqlite_v1 --format split_jsonl --split-ratio 0.5 --split-seed 2
 ```
 
 These commands generate:
@@ -44,6 +45,7 @@ These commands generate:
 - Markdown and HTML reports;
 - a LeRobot-style export metadata stub;
 - an HDF5-ready packing-contract stub.
+- a deterministic train/eval split manifest for release-oriented learning-dataset handoff;
 - CDR-decoded ROSBag2 sqlite3 and MCAP normalized datasets when the optional `rosbags` dependency is installed.
 
 ## Inputs
@@ -205,6 +207,7 @@ This case study now demonstrates:
 - topic discovery and timestamp alignment;
 - quality reporting and validation;
 - learning-dataset export surfaces;
+- reproducible train/eval split export for downstream learning workflows;
 - failure replay and comparison reporting.
 
 That makes the project substantially stronger than a simple benchmark wrapper or replay demo.

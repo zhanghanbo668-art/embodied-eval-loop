@@ -39,6 +39,12 @@ def main() -> None:
     sqlite_validation = validate_dataset("outputs/datasets/softrobotics_rosbag_sqlite_v1")
     sqlite_export = export_dataset("outputs/datasets/softrobotics_rosbag_sqlite_v1", export_format="lerobot_stub")
     sqlite_hdf5 = export_dataset("outputs/datasets/softrobotics_rosbag_sqlite_v1", export_format="hdf5_stub")
+    sqlite_split = export_dataset(
+        "outputs/datasets/softrobotics_rosbag_sqlite_v1",
+        export_format="split_jsonl",
+        split_ratio=0.5,
+        split_seed=2,
+    )
 
     cached = run_evaluation("configs/eval/libero_cached_eval.yaml")
     perturbed = run_evaluation("configs/eval/libero_perturbed_eval.yaml")
@@ -63,6 +69,7 @@ def main() -> None:
     rosbag_sqlite_quality = load_json("outputs/datasets/softrobotics_rosbag_sqlite_v1/quality_report.json")
     rosbag_cdr_quality = load_json("outputs/datasets/softrobotics_rosbag_cdr_v1/quality_report.json")
     rosbag_mcap_quality = load_json("outputs/datasets/softrobotics_rosbag_mcap_v1/quality_report.json")
+    sqlite_split_manifest = load_json("outputs/datasets/softrobotics_rosbag_sqlite_v1/exports/split_jsonl/split_manifest.json")
     rosbag_replay_summary = load_json("outputs/runs/softrobotics_rosbag_eval/replays/ROSBAG_EP_0002/summary.json")
     run_manifest = load_json("outputs/runs/libero_cached_eval/run.json")
     replay_summary = load_json("outputs/runs/libero_cached_eval/replays/LIBERO_EP_0003/summary.json")
@@ -92,6 +99,12 @@ def main() -> None:
     assert sqlite_export.episode_count == 2
     assert Path(sqlite_export.optional_artifacts["lerobot_metadata"]).exists()
     assert Path(sqlite_hdf5.optional_artifacts["hdf5_metadata"]).exists()
+    assert sqlite_split.episode_count == 2
+    assert sqlite_split_manifest["split_ratio"] == 0.5
+    assert sqlite_split_manifest["split_seed"] == 2
+    assert sqlite_split_manifest["split_counts"] == {"train": 1, "eval": 1}
+    assert Path("outputs/datasets/softrobotics_rosbag_sqlite_v1/exports/split_jsonl/train/export_manifest.json").exists()
+    assert Path("outputs/datasets/softrobotics_rosbag_sqlite_v1/exports/split_jsonl/eval/export_manifest.json").exists()
     assert rosbag_episode_quality["reference_stream"] == "rgb"
     assert Path("outputs/datasets/softrobotics_rosbag_v1/episodes/ROSBAG_EP_0001/streams/pressure.json").exists()
     assert rosbag_replay_summary["quality"]["status"] == "pass"

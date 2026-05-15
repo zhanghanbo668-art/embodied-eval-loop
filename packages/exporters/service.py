@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 from pathlib import Path
 from typing import Any
 
@@ -25,10 +26,21 @@ class ExportResult:
     optional_artifacts: dict[str, str]
 
 
+@dataclass(slots=True)
+class SplitAssignment:
+    """Deterministic split assignment for one episode."""
+
+    episode_id: str
+    split: str
+    stable_hash: str
+
+
 def export_dataset(
     dataset_root: str | Path,
     output_root: str | Path | None = None,
     export_format: str = "learning_jsonl",
+    split_ratio: float = 0.8,
+    split_seed: int = 13,
 ) -> ExportResult:
     """Export a normalized dataset into a learning-dataset view.
 
@@ -38,6 +50,7 @@ def export_dataset(
     - `parquet`: same index plus tabular action/state Parquet files when engines are available.
     - `lerobot_stub`: JSON metadata compatible with a future LeRobot-style adapter.
     - `hdf5_stub`: JSON manifest describing an HDF5-ready packing contract.
+    - `split_jsonl`: deterministic train/eval JSONL export with a split manifest.
     """
     root = resolve_repo_path(dataset_root)
     manifest = load_json(root / "dataset_manifest.json")
@@ -46,6 +59,9 @@ def export_dataset(
     dataset_id = str(manifest.get("dataset_id", root.name))
     target = ensure_dir(resolve_repo_path(output_root) if output_root else root / "exports" / export_format)
     episodes = _episode_export_rows(root, manifest)
+
+    if export_format == "split_jsonl":
+        return _write_split_jsonl_export(target, root, dataset_id, episodes, split_ratio, split_seed)
 
     index_path = dump_jsonl(target / "episodes.jsonl", episodes)
     optional_artifacts: dict[str, str] = {}
@@ -58,26 +74,14 @@ def export_dataset(
     elif export_format != "learning_jsonl":
         raise ValueError(f"Unsupported export format: {export_format}")
 
-    export_manifest = {
-        "dataset_id": dataset_id,
-        "source_dataset_root": display_path(root),
-        "format": export_format,
-        "episode_count": len(episodes),
-        "index_path": display_path(index_path),
-        "optional_artifacts": {
-            key: display_path(value)
-            for key, value in optional_artifacts.items()
-        },
-        "schema": {
-            "episode_id": "string",
-            "task_id": "string",
-            "instruction": "string",
-            "action_stream": "path",
-            "state_stream": "path",
-            "observation_streams": "mapping[path]",
-            "quality": "mapping|null",
-        },
-    }
+    export_manifest = _build_export_manifest(
+        dataset_id=dataset_id,
+        source_root=root,
+        export_format=export_format,
+        episode_count=len(episodes),
+        index_path=index_path,
+        optional_artifacts=optional_artifacts,
+    )
     manifest_path = dump_json(target / "export_manifest.json", export_manifest)
     return ExportResult(
         dataset_id=dataset_id,
@@ -134,6 +138,48 @@ def _episode_root(dataset_root: Path, episode: dict[str, Any]) -> Path:
     return dataset_root / "episodes" / str(episode["episode_id"])
 
 
+def _build_export_manifest(
+    *,
+    dataset_id: str,
+    source_root: Path,
+    export_format: str,
+    episode_count: int,
+    index_path: Path,
+    optional_artifacts: dict[str, str],
+    split: str | None = None,
+    split_ratio: float | None = None,
+    split_seed: int | None = None,
+    split_manifest_path: Path | None = None,
+) -> dict[str, Any]:
+    manifest = {
+        "dataset_id": dataset_id,
+        "source_dataset_root": display_path(source_root),
+        "format": export_format,
+        "episode_count": episode_count,
+        "index_path": display_path(index_path),
+        "optional_artifacts": {
+            key: display_path(value)
+            for key, value in optional_artifacts.items()
+        },
+        "schema": {
+            "episode_id": "string",
+            "task_id": "string",
+            "instruction": "string",
+            "action_stream": "path",
+            "state_stream": "path",
+            "observation_streams": "mapping[path]",
+            "quality": "mapping|null",
+        },
+    }
+    if split is not None:
+        manifest["split"] = split
+    if split_ratio is not None or split_seed is not None or split_manifest_path is not None:
+        manifest["split_ratio"] = split_ratio
+        manifest["split_seed"] = split_seed
+        manifest["split_manifest_path"] = display_path(split_manifest_path) if split_manifest_path else None
+    return manifest
+
+
 def _write_parquet_exports(target: Path, episodes: list[dict[str, Any]]) -> dict[str, str]:
     artifacts: dict[str, str] = {}
     action_rows: list[dict[str, Any]] = []
@@ -156,6 +202,149 @@ def _write_parquet_exports(target: Path, episodes: list[dict[str, Any]]) -> dict
     except (ImportError, ValueError) as exc:
         artifacts["parquet_warning"] = f"Parquet engine unavailable: {exc}"
     return artifacts
+
+
+def _write_split_jsonl_export(
+    target: Path,
+    source_root: Path,
+    dataset_id: str,
+    episodes: list[dict[str, Any]],
+    split_ratio: float,
+    split_seed: int,
+) -> ExportResult:
+    _validate_split_ratio(split_ratio)
+    assignments = _split_assignments(dataset_id, episodes, split_ratio, split_seed)
+    split_manifest_path = target / "split_manifest.json"
+    index_rows: list[dict[str, Any]] = []
+    split_rows: dict[str, list[dict[str, Any]]] = {"train": [], "eval": []}
+    assignments_by_episode = {assignment.episode_id: assignment for assignment in assignments}
+
+    for episode in sorted(episodes, key=_episode_sort_key):
+        episode_id = str(episode.get("episode_id", ""))
+        assignment = assignments_by_episode[episode_id]
+        split_rows[assignment.split].append(episode)
+        index_rows.append(
+            {
+                **episode,
+                "split": assignment.split,
+                "stable_hash": assignment.stable_hash,
+            }
+        )
+
+    index_path = dump_jsonl(target / "episodes.jsonl", index_rows)
+    warnings = _split_warnings(split_rows)
+
+    optional_artifacts: dict[str, str] = {}
+    split_refs: dict[str, dict[str, str]] = {}
+    for split_name in ("train", "eval"):
+        split_target = ensure_dir(target / split_name)
+        split_index_path = dump_jsonl(split_target / "episodes.jsonl", split_rows[split_name])
+        split_manifest = _build_export_manifest(
+            dataset_id=dataset_id,
+            source_root=source_root,
+            export_format="split_jsonl",
+            episode_count=len(split_rows[split_name]),
+            index_path=split_index_path,
+            optional_artifacts={},
+            split=split_name,
+            split_ratio=split_ratio,
+            split_seed=split_seed,
+            split_manifest_path=split_manifest_path,
+        )
+        split_manifest["warnings"] = warnings
+        scoped_manifest_path = dump_json(split_target / "export_manifest.json", split_manifest)
+        split_refs[split_name] = {
+            "index_path": display_path(split_index_path),
+            "manifest_path": display_path(scoped_manifest_path),
+        }
+        optional_artifacts[f"{split_name}_index"] = str(split_index_path)
+        optional_artifacts[f"{split_name}_manifest"] = str(scoped_manifest_path)
+    optional_artifacts["split_manifest"] = str(split_manifest_path)
+
+    split_manifest = {
+        "dataset_id": dataset_id,
+        "source_dataset_root": display_path(source_root),
+        "format": "split_jsonl",
+        "split_ratio": split_ratio,
+        "split_seed": split_seed,
+        "episode_count": len(episodes),
+        "split_counts": {
+            "train": len(split_rows["train"]),
+            "eval": len(split_rows["eval"]),
+        },
+        "splits": split_refs,
+        "assignments": [
+            {
+                "episode_id": assignment.episode_id,
+                "split": assignment.split,
+                "stable_hash": assignment.stable_hash,
+            }
+            for assignment in assignments
+        ],
+        "warnings": warnings,
+    }
+    dump_json(
+        split_manifest_path,
+        split_manifest,
+    )
+    export_manifest = _build_export_manifest(
+        dataset_id=dataset_id,
+        source_root=source_root,
+        export_format="split_jsonl",
+        episode_count=len(episodes),
+        index_path=index_path,
+        optional_artifacts=optional_artifacts,
+        split_ratio=split_ratio,
+        split_seed=split_seed,
+        split_manifest_path=split_manifest_path,
+    )
+    export_manifest["warnings"] = warnings
+    manifest_path = dump_json(target / "export_manifest.json", export_manifest)
+    return ExportResult(
+        dataset_id=dataset_id,
+        export_root=target,
+        format="split_jsonl",
+        episode_count=len(episodes),
+        manifest_path=manifest_path,
+        index_path=index_path,
+        optional_artifacts=optional_artifacts,
+    )
+
+
+def _validate_split_ratio(split_ratio: float) -> None:
+    if not 0.0 <= split_ratio <= 1.0:
+        raise ValueError(f"Split ratio must be between 0.0 and 1.0, got {split_ratio!r}")
+
+
+def _split_assignments(
+    dataset_id: str,
+    episodes: list[dict[str, Any]],
+    split_ratio: float,
+    split_seed: int,
+) -> list[SplitAssignment]:
+    threshold = int(split_ratio * (1 << 64))
+    assignments: list[SplitAssignment] = []
+    for episode in episodes:
+        episode_id = str(episode.get("episode_id", ""))
+        digest = hashlib.sha256(f"{dataset_id}:{episode_id}:{split_seed}".encode("utf-8")).hexdigest()
+        bucket = int.from_bytes(bytes.fromhex(digest[:16]), "big")
+        split_name = "train" if bucket < threshold else "eval"
+        assignments.append(SplitAssignment(episode_id=episode_id, split=split_name, stable_hash=digest))
+    return sorted(assignments, key=lambda assignment: assignment.episode_id)
+
+
+def _episode_sort_key(episode: dict[str, Any]) -> str:
+    return str(episode.get("episode_id", ""))
+
+
+def _split_warnings(split_rows: dict[str, list[dict[str, Any]]]) -> list[str]:
+    warnings: list[str] = []
+    for split_name, rows in split_rows.items():
+        if not rows:
+            warnings.append(
+                f"{split_name} split is empty; choose a different split ratio or split seed for small datasets."
+            )
+    return warnings
 
 
 def _stream_rows(episode: dict[str, Any], stream_key: str) -> list[dict[str, Any]]:
